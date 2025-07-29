@@ -2,6 +2,7 @@
 
 import sys
 import pathlib
+import requests
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -10,6 +11,8 @@ from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QVBoxLayout,
+    QGridLayout,
+    QLabel,
     QTextEdit,
 )
 from PyQt6.QtGui import (
@@ -55,10 +58,88 @@ class Window(QMainWindow):
         action = QAction("&About", self)
         action.triggered.connect(lambda: self.msg("About", "version.txt"))
         menu.addAction(action)
+        action = QAction("&Check for updates", self)
+        action.triggered.connect(self.check_for_updates);
+        menu.addAction(action)
         action = QAction("&Help", self)
         action.triggered.connect(lambda: self.msg("Help", "help.html"))
         menu.addAction(action)
 
+    def check_for_updates(self):
+
+        class VersionDialog(QDialog):
+            def __init__(self, parent, pver: str, ghver: str):
+                super().__init__(parent)
+                self.setWindowTitle("Versions")
+
+                layout = QVBoxLayout(self)
+                grid = QGridLayout()
+                layout.addLayout(grid)
+
+
+                grid.addWidget(QLabel("This version:"), 0, 0)
+                grid.addWidget(QLabel(pver), 0, 1)
+
+                grid.addWidget(QLabel("Github code version:"), 1, 0)
+                grid.addWidget(QLabel(ghver), 1, 1)
+
+
+                btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+                btns.accepted.connect(self.accept)
+                layout.addWidget(btns)
+
+
+        cver = self.get_prog_version() or 'unknown'
+        ghver = self.get_github_version() or 'unknown'
+        dia = VersionDialog(self,cver, ghver)
+        dia.exec()
+
+    def __parse_version_txt(self, contents):
+        """Return None or version string
+
+        Parameters
+        ----------
+        contents: str
+            The contents of version.txt file
+
+        Returns
+        -------
+        None or str
+            On any error return None, else return a string version like 1.2.3
+        """
+        try:
+            return [ln.split("Version: ", 1)[1].strip() for ln in contents.splitlines() if ln.startswith("Version: ")][0]
+        except:
+            return None
+
+    def get_prog_version(self):
+        """Return version of this running program or None"""
+
+        fname = 'version.txt'
+        if getattr(sys, "frozen", False):
+            fname = pathlib.Path(sys._MEIPASS) / fname
+        else:
+            me = pathlib.Path(sys.argv[0]).resolve()
+            fname = me.parent / fname
+
+        try:
+            with open(fname) as fh:
+                return(self.__parse_version_txt(fh.read()))
+        except:
+            return None
+        
+    def get_github_version(self):
+        url = "https://raw.githubusercontent.com/niwa/hydroscope/main/bin/version.txt"
+        try:
+            r = requests.get(url, timeout=10)
+            r.raise_for_status()
+            return self.__parse_version_txt(r.text)
+        except:
+            return None
+    
+
+    def get_installable_versions(self):
+        pass
 
     def possibly_update(self):
         return
