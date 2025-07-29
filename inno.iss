@@ -13,7 +13,6 @@
 
 
 
-
 [Setup]
 AppId={{710723FD-D7D5-444C-885C-8C442239DD97}
 AppName={#MyAppName}

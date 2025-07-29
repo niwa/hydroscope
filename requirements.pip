@@ -3,3 +3,4 @@ PyQt6==6.9.1
 netcdf4==1.7.2
 packaging==25.0
 appdirs==1.4.4
+requests==2.32.4
