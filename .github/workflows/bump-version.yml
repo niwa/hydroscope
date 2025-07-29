@@ -42,5 +42,6 @@ jobs:
         run: |
           git add bin/version.txt
           git commit -m "Bump version to $NEW_VERSION"
-          git push
+          git add $NEW_VERSION
+          git push origin $NEW_VERSION
 

@@ -13,6 +13,7 @@
 
 
 
+
 [Setup]
 AppId={{710723FD-D7D5-444C-885C-8C442239DD97}
 AppName={#MyAppName}
@@ -27,7 +28,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
-OutputBaseFilename=hydroscopesetup
+OutputBaseFilename=hydroscopesetup-{#MyAppVersion}
 SetupIconFile=dist\hydroscope\_internal\hydroscope.ico
 Compression=lzma
 SolidCompression=yes
