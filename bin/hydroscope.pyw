@@ -49,7 +49,7 @@ class Window(QMainWindow):
         action = QAction("&About", self)
         action.triggered.connect(lambda: utils.msg(self, "About", "version.txt"))
         menu.addAction(action)
-        action = QAction("&Check for updates", self)
+        action = QAction("&Update", self)
         action.triggered.connect(lambda: updates.check_for_updates(self))
         menu.addAction(action)
         action = QAction("&Help", self)
