@@ -8,10 +8,8 @@ from PyQt6.QtWidgets import (
     QTextEdit,
 )
 
-
+"""
 def confirm_and_run(parent, msg, fun):
-    """Display confirmation message, then possibly run fun"""
-
     box = QMessageBox(parent)
     box.setText(msg)
     box.setWindowTitle("Confirm")
@@ -20,6 +18,7 @@ def confirm_and_run(parent, msg, fun):
     if result == QMessageBox.StandardButton.Ok:
         fun()
 
+"""
 
 def msg(parent, title, fname):
     class ScrollableDialog(QDialog):
