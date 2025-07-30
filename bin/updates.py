@@ -5,6 +5,7 @@ import requests
 import platformdirs
 import threading
 from packaging import version
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QMessageBox,
     QDialog,
@@ -13,7 +14,6 @@ from PyQt6.QtWidgets import (
     QLabel,
     QPushButton,
 )
-from PyQt6.QtCore import Qt
 
 
 def check_for_updates(parent):
@@ -54,7 +54,7 @@ def check_for_updates(parent):
                     "text-align: left; color: blue; text-decoration: underline; background: none; border: none;"
                 )
                 btn.clicked.connect(
-                    lambda _, ver=v: possibly_update_to_version(parent, cver, ver)
+                    lambda _, ver=v: possibly_update_to_version(parent, "Update?", cver, ver)
                 )
                 grid.addWidget(btn, i + 2, 1)
 
@@ -79,7 +79,6 @@ def download_version(v: str):
     installer = ddir / f"hydroscopesetup-{v}.exe"
 
     def download():
-        print("Starting download...", flush=True)
         try:
             with requests.get(url, stream=True) as r:
                 r.raise_for_status()
@@ -96,7 +95,7 @@ def download_version(v: str):
     return installer, done_event, errors
 
 
-def possibly_update_to_version(parent, old, new):
+def possibly_update_to_version(parent, title, old, new):
     """Confirm we want to update from old to new, then do it"""
     if version.parse(new) <= version.parse(old):
         m = f"Version {new} isn't newer than {old}, are you sure you want to install it?"
@@ -108,7 +107,7 @@ def possibly_update_to_version(parent, old, new):
 
     # see if they really want to do update
     r = QMessageBox.question(
-        parent, "Update?", m, QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
+        parent, title, m, QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
     )
 
     if r == QMessageBox.StandardButton.Ok:
@@ -119,6 +118,14 @@ def possibly_update_to_version(parent, old, new):
             )
             return
         os.execl(installer, installer)
+
+
+def possibly_update(parent):
+    cver = get_prog_version()
+    ivers = get_installable_versions()
+    if not (cver and ivers) or version.parse(cver) >= version.parse(ivers[0]):
+        return
+    possibly_update_to_version(parent, "New version available", cver, ivers[0])
 
 
 def parse_version_txt(contents):
@@ -186,5 +193,3 @@ def get_installable_versions():
         return None
 
 
-def possibly_update(parent):
-    return
