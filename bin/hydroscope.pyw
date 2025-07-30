@@ -1,30 +1,18 @@
 #!/usr/bin/env python
 
-import os
 import sys
 import pathlib
-import requests
-import atexit
-from packaging.version import Version
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
     QMenu,
-    QMessageBox,
-    QDialog,
-    QDialogButtonBox,
-    QVBoxLayout,
-    QGridLayout,
-    QLabel,
-    QTextEdit,
-    QPushButton
 )
 from PyQt6.QtGui import (
     QAction,
     QIcon
 )
-import platformdirs
-import utils, updates
+import utils
+import updates
 
 class Window(QMainWindow):
     def __init__(self, parent=None):
@@ -62,7 +50,7 @@ class Window(QMainWindow):
         action.triggered.connect(lambda: utils.msg(self, "About", "version.txt"))
         menu.addAction(action)
         action = QAction("&Check for updates", self)
-        action.triggered.connect(lambda: updates.check_for_updates(self));
+        action.triggered.connect(lambda: updates.check_for_updates(self))
         menu.addAction(action)
         action = QAction("&Help", self)
         action.triggered.connect(lambda: utils.msg(self, "Help", "help.html"))

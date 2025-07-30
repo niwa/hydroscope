@@ -1,4 +1,3 @@
-
 import sys
 import pathlib
 from PyQt6.QtWidgets import (
@@ -58,4 +57,3 @@ def msg(parent, title, fname):
                 title, txt, parent=parent, html=pathlib.Path(fname).suffix == ".html"
             )
             dl.exec()
-
