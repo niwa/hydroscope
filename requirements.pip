@@ -4,3 +4,5 @@ netcdf4==1.7.2
 packaging==25.0
 requests==2.32.4
 platformdirs==4.3.8
+pandas==2.3.1
+xarray==2025.7.1

@@ -11,16 +11,24 @@ from PyQt6.QtWidgets import (
     QLabel,
     QPushButton,
     QComboBox,
-    QFileDialog
+    QFileDialog,
+    QMessageBox
 )
 from PyQt6.QtGui import (
     QAction,
     QIcon
 )
+from PyQt6.QtCore import pyqtSignal
+import platformdirs
 import utils
 import updates
+import pandas as pd
+import xarray as xr
 
 class Window(QMainWindow):
+    model_changed = pyqtSignal(pathlib.Path)
+    model_var_changed = pyqtSignal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("HydroScope")
@@ -36,6 +44,9 @@ class Window(QMainWindow):
             self.setWindowIcon(QIcon(str(fname)))
         except Exception:
             pass
+
+        # we need proper project stuff, but in the meantime hack this in
+        self.opendir = pathlib.Path(platformdirs.user_downloads_dir())
 
         self.setCentralWidget(self.__create_main())
         self.__create_menus()
@@ -76,21 +87,21 @@ class Window(QMainWindow):
         # Model output file
         hbox.addWidget(QLabel("File:"))
         self.model_label = lab = utils.ClickableLineEdit("Click to select file", char_width=15)
-        #= utils.ClickableLabel("Click to select file")
         self.model_fn = None
-        lab.clicked.connect(self.select_file)
+        lab.clicked.connect(self.select_model_file)
+        self.model_changed.connect(self.set_model_variables)
+        self.model_changed.connect(self.toggle_model_dims)
         hbox.addWidget(lab)
-
 
         # Variable label and dropdown
         hbox.addWidget(QLabel("Variable:"))
-        variable_dropdown = QComboBox()
-        variable_dropdown.addItems(["Option 1", "Option 2", "Option 3"])  # Example items
-        hbox.addWidget(variable_dropdown)
+        self.model_variables_cb = cb = QComboBox()
+        hbox.addWidget(cb)
 
         # Dimensions button
-        dimensions_button = QPushButton("Dimensions")
-        hbox.addWidget(dimensions_button)
+        self.model_dims_btn = btn = QPushButton("Dimensions")
+        self.model_dims_btn.clicked.connect(self.set_model_dims)
+        hbox.addWidget(btn)
 
         # Optional: Add stretch at the end to push widgets left
         hbox.addStretch()
@@ -123,11 +134,110 @@ class Window(QMainWindow):
 
         return widget
 
-    def select_file(self):
-        fname, _ = QFileDialog.getOpenFileName(self, "Select a file")
+    def select_model_file(self):
+        fname, _ = QFileDialog.getOpenFileName(self, "Select a file", str(self.opendir), "NetCDF or CSV Files (*.nc *.csv)")
         if fname:
-            self.model_label.setText(fname)
+            fname = pathlib.Path(fname)
+            self.opendir = fname.parent
+            self.model_label.setText(fname.name)
             self.model_fn = fname
+            self.model_changed.emit(fname)
+
+    
+    def set_model_variables(self, path: pathlib.Path):
+        try:
+            if path.suffix.lower() == ".csv":
+                self.model_data = df = pd.read_csv(path, index_col=0, parse_dates=True)
+                variables = df.columns.tolist()
+            elif path.suffix.lower() == ".nc":
+                self.model_data = ds = xr.open_dataset(path)
+                variables = list(ds.data_vars.keys())
+            else:
+                raise ValueError("Unsupported file format")
+
+            # Example of a format check
+            if not variables:
+                raise ValueError("No variables found in file")
+
+            self.model_variables_cb.clear()
+            self.model_variables_cb.addItems(variables)
+
+        except Exception as e:
+            self.model_data = None
+            self.model_fn = None
+            self.model_label.setText("Click to select model")
+
+
+    def toggle_model_dims(self, path: pathlib.Path):
+        if path.suffix.lower() == ".nc":
+            self.model_dims_btn.setEnabled(True)
+        else:
+            self.model_dims_btn.setEnabled(False)
+
+    def set_model_dims(self, path: pathlib.Path):
+        vname = self.model_variables_cb.currentText()
+        if not vname:
+            QMessageBox.warning(self, "No Variable", "Please select a variable.")
+            return
+
+        try:
+            if self.model_data is not None:
+                if vname not in self.model_data:
+                    raise KeyError(f"Variable '{vname}' not found in {self.model_fn}")
+                dims = self.model_data[vname].dims
+                shape = self.model_data[vname].shape
+                dim_info = f"NetCDF variable '{vname}': dims = {dims}, shape = {shape}"
+            else:
+                raise RuntimeError("No data loaded.")
+
+            QMessageBox.information(self, "Variable Dimensions", dim_info)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not get dimensions:\n{str(e)}")
+
+    """
+    def set_model_dims(self, path: pathlib.Path):
+        var_name = self.variable_dropdown.currentText()
+        if not var_name:
+            QMessageBox.warning(self, "No Variable", "Please select a variable.")
+            return
+
+        try:
+            if self.df is not None:
+                # CSV: typically 1D columns, no dims except index
+                # We'll treat the index as a dimension with values from the index
+                dims = [self.df.index.name or "index"]
+                dim_values_map = {
+                    dims[0]: self.df.index.astype(str).tolist()
+                }
+            elif self.ds is not None:
+                if var_name not in self.ds:
+                    raise KeyError(f"Variable '{var_name}' not found in NetCDF.")
+                dims = self.ds[var_name].dims
+                dim_values_map = {}
+                for dim in dims:
+                    vals = self.ds.coords.get(dim, None)
+                    if vals is not None:
+                        dim_values_map[dim] = vals.values.tolist()
+                    else:
+                        # no coordinate values, use just range indices
+                        dim_length = self.ds.dims[dim]
+                        dim_values_map[dim] = list(range(dim_length))
+            else:
+                raise RuntimeError("No data loaded.")
+
+            dialog = DimensionSelectorDialog(dims, dim_values_map, parent=self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                selected_values = dialog.get_values()
+                # You can do something with selected_values here
+                # For example, print or store them:
+                print("Selected dimension values:", selected_values)
+                # Maybe store in self or use to subset dataset etc.
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not get dimensions:\n{str(e)}")
+    """
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

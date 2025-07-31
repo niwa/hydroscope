@@ -60,18 +60,9 @@ def msg(parent, title, fname):
             dl.exec()
 
 
-class ClickableLabel(QLabel):
+class ClickableLineEdit(QLineEdit):
     clicked = pyqtSignal()
 
-    def __init__(self, text='', parent=None):
-        super().__init__(text, parent)
-        self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))  # make it look clickable
-
-    def mousePressEvent(self, event):
-        self.clicked.emit()
-
-
-class ClickableLineEdit(QLineEdit):
     def __init__(self, text='', char_width=15, parent=None):
         super().__init__(text, parent)
         self.setReadOnly(True)
