@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import sys
+import re
 import pathlib
 from PyQt6.QtWidgets import (
     QApplication,
@@ -12,7 +13,8 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QComboBox,
     QFileDialog,
-    QMessageBox
+    QMessageBox,
+    QDialog
 )
 from PyQt6.QtGui import (
     QAction,
@@ -22,6 +24,7 @@ from PyQt6.QtCore import pyqtSignal
 import platformdirs
 import utils
 import updates
+import dimensions
 import pandas as pd
 import xarray as xr
 
@@ -174,6 +177,7 @@ class Window(QMainWindow):
         else:
             self.model_dims_btn.setEnabled(False)
 
+    """
     def set_model_dims(self, path: pathlib.Path):
         vname = self.model_variables_cb.currentText()
         if not vname:
@@ -196,37 +200,30 @@ class Window(QMainWindow):
             QMessageBox.critical(self, "Error", f"Could not get dimensions:\n{str(e)}")
 
     """
+
     def set_model_dims(self, path: pathlib.Path):
-        var_name = self.variable_dropdown.currentText()
-        if not var_name:
+        vname = self.model_variables_cb.currentText()
+        if not vname:
             QMessageBox.warning(self, "No Variable", "Please select a variable.")
             return
 
         try:
-            if self.df is not None:
-                # CSV: typically 1D columns, no dims except index
-                # We'll treat the index as a dimension with values from the index
-                dims = [self.df.index.name or "index"]
-                dim_values_map = {
-                    dims[0]: self.df.index.astype(str).tolist()
-                }
-            elif self.ds is not None:
-                if var_name not in self.ds:
-                    raise KeyError(f"Variable '{var_name}' not found in NetCDF.")
-                dims = self.ds[var_name].dims
-                dim_values_map = {}
+            if self.model_data is not None:
+                if vname not in self.model_data:
+                    raise KeyError(f"Variable '{vname}' not found in {self.model_fn}")
+                dims = [d for d in self.model_data[vname].dims if not re.search('time|date', d, re.IGNORECASE)]
+                dim2vals = {}
                 for dim in dims:
-                    vals = self.ds.coords.get(dim, None)
+                    vals = self.model_data.coords.get(dim, None)
                     if vals is not None:
-                        dim_values_map[dim] = vals.values.tolist()
+                        dim2vals[dim] = vals.values.tolist()
                     else:
                         # no coordinate values, use just range indices
-                        dim_length = self.ds.dims[dim]
-                        dim_values_map[dim] = list(range(dim_length))
+                        dim2vals[dim] = list(range(self.model_data.dims[dim]))
             else:
                 raise RuntimeError("No data loaded.")
 
-            dialog = DimensionSelectorDialog(dims, dim_values_map, parent=self)
+            dialog = dimensions.DimensionSelectorDialog(dim2vals, parent=self)
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 selected_values = dialog.get_values()
                 # You can do something with selected_values here
@@ -236,7 +233,6 @@ class Window(QMainWindow):
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Could not get dimensions:\n{str(e)}")
-    """
 
 
 if __name__ == "__main__":

@@ -4,39 +4,38 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 
 class DimensionSelectorDialog(QDialog):
-    def __init__(self, dims, dim_values_map, parent=None):
+    def __init__(self, dims, parent=None):
         """
-        dims: list of dimension names (strings)
-        dim_values_map: dict mapping dim name -> list/array of possible values
+        Parameters
+        ----------
+        dims: dict
+            Maps dimension name (str) to list of possible values
         """
         super().__init__(parent)
-        self.setWindowTitle("Select Dimension Values")
-        self.setModal(True)
+        self.setWindowTitle("Select Dimension values")
 
-        self.inputs = {}  # dim name -> widget (QComboBox or QLineEdit)
+        # maps dim name to widget (QComboBox or QLineEdit)
+        self.inputs = {} 
 
         layout = QVBoxLayout()
         grid = QGridLayout()
         grid.addWidget(QLabel("Dimension"), 0, 0)
         grid.addWidget(QLabel("Value"), 0, 1)
 
-        for row, dim_name in enumerate(dims, start=1):
-            values = dim_values_map.get(dim_name, [])
-            label = QLabel(dim_name)
+        for row, (d, vals) in enumerate(dims.items(), start=1):
+            label = QLabel(d)
             grid.addWidget(label, row, 0)
 
-            if len(values) > 0 and len(values) < 20:
+            if 0 < len(vals) < 20:
                 combo = QComboBox()
-                combo.addItems([str(v) for v in values])
+                combo.addItems([str(v) for v in vals])
                 grid.addWidget(combo, row, 1)
-                self.inputs[dim_name] = combo
+                self.inputs[d] = combo
             else:
-                # large number of values, use free text input
                 line_edit = QLineEdit()
-                # Optional: set a placeholder
-                line_edit.setPlaceholderText(f"Enter {dim_name} value")
+                line_edit.setPlaceholderText(f"Enter {d} value")
                 grid.addWidget(line_edit, row, 1)
-                self.inputs[dim_name] = line_edit
+                self.inputs[d] = line_edit
 
         layout.addLayout(grid)
 
