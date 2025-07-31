@@ -9,7 +9,9 @@ from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout, QHBoxLayout,
     QLabel,
-    QPushButton
+    QPushButton,
+    QComboBox,
+    QFileDialog
 )
 from PyQt6.QtGui import (
     QAction,
@@ -65,18 +67,67 @@ class Window(QMainWindow):
         widget = QWidget()
         vbox = QVBoxLayout(widget)
 
-        for i in range(4):
-            title = QLabel(f"Section {i+1}")
-            hbox = QHBoxLayout()
+        # Model
+        title = QLabel(f"Model output")
+        vbox.addWidget(title)
 
-            # Just add sample content to each HBox for demo
-            hbox.addWidget(QPushButton(f"Button A{i+1}"))
-            hbox.addWidget(QPushButton(f"Button B{i+1}"))
+        hbox = QHBoxLayout()
 
-            vbox.addWidget(title)
-            vbox.addLayout(hbox)
+        # Model output file
+        hbox.addWidget(QLabel("File:"))
+        self.model_label = lab = utils.ClickableLineEdit("Click to select file", char_width=15)
+        #= utils.ClickableLabel("Click to select file")
+        self.model_fn = None
+        lab.clicked.connect(self.select_file)
+        hbox.addWidget(lab)
+
+
+        # Variable label and dropdown
+        hbox.addWidget(QLabel("Variable:"))
+        variable_dropdown = QComboBox()
+        variable_dropdown.addItems(["Option 1", "Option 2", "Option 3"])  # Example items
+        hbox.addWidget(variable_dropdown)
+
+        # Dimensions button
+        dimensions_button = QPushButton("Dimensions")
+        hbox.addWidget(dimensions_button)
+
+        # Optional: Add stretch at the end to push widgets left
+        hbox.addStretch()
+
+        # View button
+        view_button = QPushButton("View")
+        hbox.addWidget(view_button)
+
+
+        vbox.addLayout(hbox)
+
+        # Obs
+        title = QLabel(f"Observations")
+        hbox = QHBoxLayout()
+        vbox.addWidget(title)
+        vbox.addLayout(hbox)
+
+        # Metrics
+        title = QLabel(f"Purpose and metrics")
+        hbox = QHBoxLayout()
+        vbox.addWidget(title)
+        vbox.addLayout(hbox)
+
+        # Results
+        title = QLabel(f"Results")
+        hbox = QHBoxLayout()
+        vbox.addWidget(title)
+        vbox.addLayout(hbox)
+
 
         return widget
+
+    def select_file(self):
+        fname, _ = QFileDialog.getOpenFileName(self, "Select a file")
+        if fname:
+            self.model_label.setText(fname)
+            self.model_fn = fname
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -7,6 +7,19 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QTextEdit,
 )
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
+    QApplication, QWidget, QLabel, QFileDialog, QVBoxLayout
+)
+from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtGui import QCursor
+import sys
+
+from PyQt6.QtWidgets import (
+    QApplication, QWidget, QLineEdit, QFileDialog, QVBoxLayout
+)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QCursor, QMouseEvent, QFontMetrics
 
 
 def msg(parent, title, fname):
@@ -45,3 +58,30 @@ def msg(parent, title, fname):
                 title, txt, parent=parent, html=pathlib.Path(fname).suffix == ".html"
             )
             dl.exec()
+
+
+class ClickableLabel(QLabel):
+    clicked = pyqtSignal()
+
+    def __init__(self, text='', parent=None):
+        super().__init__(text, parent)
+        self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))  # make it look clickable
+
+    def mousePressEvent(self, event):
+        self.clicked.emit()
+
+
+class ClickableLineEdit(QLineEdit):
+    def __init__(self, text='', char_width=15, parent=None):
+        super().__init__(text, parent)
+        self.setReadOnly(True)
+        self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+
+        # Set fixed width based on character count
+        font_metrics = QFontMetrics(self.font())
+        width = font_metrics.horizontalAdvance('X' * char_width) + 10
+        self.setFixedWidth(width)
+
+    def mousePressEvent(self, event):
+        self.clicked.emit()
+
