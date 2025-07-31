@@ -6,6 +6,10 @@ from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
     QMenu,
+    QWidget,
+    QVBoxLayout, QHBoxLayout,
+    QLabel,
+    QPushButton
 )
 from PyQt6.QtGui import (
     QAction,
@@ -31,6 +35,7 @@ class Window(QMainWindow):
         except Exception:
             pass
 
+        self.setCentralWidget(self.__create_main())
         self.__create_menus()
 
         updates.possibly_update(self)
@@ -56,6 +61,22 @@ class Window(QMainWindow):
         action.triggered.connect(lambda: utils.msg(self, "Help", "help.html"))
         menu.addAction(action)
 
+    def __create_main(self) -> QWidget:
+        widget = QWidget()
+        vbox = QVBoxLayout(widget)
+
+        for i in range(4):
+            title = QLabel(f"Section {i+1}")
+            hbox = QHBoxLayout()
+
+            # Just add sample content to each HBox for demo
+            hbox.addWidget(QPushButton(f"Button A{i+1}"))
+            hbox.addWidget(QPushButton(f"Button B{i+1}"))
+
+            vbox.addWidget(title)
+            vbox.addLayout(hbox)
+
+        return widget
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
