@@ -24,13 +24,11 @@ from PyQt6.QtCore import pyqtSignal
 import platformdirs
 import utils
 import updates
-import dimensions
 import pandas as pd
 import xarray as xr
+import model
 
 class Window(QMainWindow):
-    model_changed = pyqtSignal(pathlib.Path)
-    model_var_changed = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -49,12 +47,21 @@ class Window(QMainWindow):
             pass
 
         # we need proper project stuff, but in the meantime hack this in
-        self.opendir = pathlib.Path(platformdirs.user_downloads_dir())
+        self.lastdir = pathlib.Path(platformdirs.user_downloads_dir())
+
+        # the model
+        self.model = model.Model()
 
         self.setCentralWidget(self.__create_main())
         self.__create_menus()
 
         updates.possibly_update(self)
+
+    def set_lastdir(self, p):
+        self.lastdir = p
+
+    def get_lastdir(self):
+        return self.lastdir
 
     def __create_menus(self):
         bar = self.menuBar()
@@ -82,6 +89,7 @@ class Window(QMainWindow):
         vbox = QVBoxLayout(widget)
 
         # Model
+        """
         title = QLabel(f"Model output")
         vbox.addWidget(title)
 
@@ -113,8 +121,9 @@ class Window(QMainWindow):
         view_button = QPushButton("View")
         hbox.addWidget(view_button)
 
-
-        vbox.addLayout(hbox)
+        """
+        md = model.ModelWidget(self.model, self)
+        vbox.addWidget(md)
 
         # Obs
         title = QLabel(f"Observations")
@@ -136,7 +145,8 @@ class Window(QMainWindow):
 
 
         return widget
-
+    
+    """
     def select_model_file(self):
         fname, _ = QFileDialog.getOpenFileName(self, "Select a file", str(self.opendir), "NetCDF or CSV Files (*.nc *.csv)")
         if fname:
@@ -178,6 +188,7 @@ class Window(QMainWindow):
             self.model_dims_btn.setEnabled(False)
 
     """
+    """
     def set_model_dims(self, path: pathlib.Path):
         vname = self.model_variables_cb.currentText()
         if not vname:
@@ -201,6 +212,7 @@ class Window(QMainWindow):
 
     """
 
+    """
     def set_model_dims(self, path: pathlib.Path):
         vname = self.model_variables_cb.currentText()
         if not vname:
@@ -234,6 +246,7 @@ class Window(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Could not get dimensions:\n{str(e)}")
 
+    """
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
