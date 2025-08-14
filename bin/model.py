@@ -1,56 +1,47 @@
-import sys
 import re
 import pathlib
 from PyQt6.QtWidgets import (
-    QApplication,
-    QMainWindow,
-    QMenu,
     QWidget,
-    QVBoxLayout, QHBoxLayout,
+    QVBoxLayout,
+    QHBoxLayout,
     QLabel,
     QPushButton,
     QComboBox,
     QFileDialog,
     QMessageBox,
     QDialog,
-    QWidget, QLabel, QHBoxLayout, QVBoxLayout, QComboBox,
-    QPushButton, QLineEdit,
-    QDialog, QDialogButtonBox, QLabel, QComboBox, QLineEdit, QGridLayout, QVBoxLayout, QMessageBox
+    QLineEdit,
+    QDialogButtonBox,
+    QGridLayout,
 )
 
 from PyQt6.QtGui import (
     QRegularExpressionValidator,
-    QAction,
-    QIcon
 )
 from PyQt6.QtCore import (
-    Qt,
     QRegularExpression,
-    pyqtSignal
 )
-import platformdirs
 import utils
-import updates
 import pandas as pd
 import xarray as xr
 import matplotlib
-matplotlib.use('QtAgg')
+
+matplotlib.use("QtAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-
 
 
 class Model:
     def __init__(self):
         self.fn = None
-        self.data = None        # pd.DataFrame or xr.Dataset
-        self.vars = []          # list of strings
-        self.v2d = {}           # maps variable to list of dimensions minus time
-        self.d2vals = {}        # maps dim to list of possible values
-        self.d2type = {}        # maps dim to the type of values
-        self.series = None      # the selected variable as a pd.Series
-        self.var = None         # measuring this var
-        self.dims = {}          # measuring var with these dims
+        self.data = None  # pd.DataFrame or xr.Dataset
+        self.vars = []  # list of strings
+        self.v2d = {}  # maps variable to list of dimensions minus time
+        self.d2vals = {}  # maps dim to list of possible values
+        self.d2type = {}  # maps dim to the type of values
+        self.series = None  # the selected variable as a pd.Series
+        self.var = None  # measuring this var
+        self.dims = {}  # measuring var with these dims
 
     def read_fn(self, fn):
 
@@ -67,7 +58,7 @@ class Model:
             self.d2vals = {}
         elif fn.suffix.lower() == ".nc":
             # unfortunately topnet doesn't write correct streamq files, time_bnd doesn't have attrs set
-            #self.data = ds = xr.open_dataset(fn)
+            # self.data = ds = xr.open_dataset(fn)
             self.data = ds = xr.open_dataset(fn, drop_variables="time_bnd")
             self.v2d = {
                 v: [d for d in da.dims if not re.search(r"time|date", d, re.IGNORECASE)]
@@ -85,7 +76,7 @@ class Model:
 
         if not self.vars:
             raise ValueError("No variables found in file")
-       
+
     def get_vars(self):
         return self.vars
 
@@ -141,7 +132,7 @@ class Model:
 
     def get_series(self):
         return self.series
-       
+
 
 class ModelWidget(QWidget):
 
@@ -188,12 +179,17 @@ class ModelWidget(QWidget):
         vbox.addLayout(hbox)
 
     def select_model_file(self):
-        fname, _ = QFileDialog.getOpenFileName(self, "Select a file", self.parent.cp['DEFAULT']['lastdir'], "NetCDF or CSV Files (*.nc *.csv)")
+        fname, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select a file",
+            self.parent.cp["DEFAULT"]["lastdir"],
+            "NetCDF or CSV Files (*.nc *.csv)",
+        )
         if not fname:
             return
         fname = pathlib.Path(fname)
 
-        self.parent.cp['DEFAULT']['lastdir'] = str(fname.parent)
+        self.parent.cp["DEFAULT"]["lastdir"] = str(fname.parent)
         self.parent.save_config()
 
         # update GUI
@@ -216,7 +212,7 @@ class ModelWidget(QWidget):
         if s is None:
             QMessageBox.warning(self, "No variable", "File/variable/dimension must be all set")
             return
-      
+
         class PlotDialog(QDialog):
             def __init__(self, parent, series):
                 super().__init__(parent)
@@ -227,10 +223,10 @@ class ModelWidget(QWidget):
                 # dim string
                 dims = parent.model.get_dims()
                 if dims:
-                    dstr = [f'{dim}={val}' for dim, val in dims.items()]
+                    dstr = [f"{dim}={val}" for dim, val in dims.items()]
                     dstr = f" ({','.join(dstr)})"
                 else:
-                    dstr = ''
+                    dstr = ""
 
                 # Create Matplotlib Figure
                 fig, ax = plt.subplots()
@@ -251,23 +247,24 @@ class ModelWidget(QWidget):
 
     def set_var(self, v):
         self.model.set_var(v)
-    
+
     def set_dims(self):
         vname = self.vars_cb.currentText()
         if not vname:
             QMessageBox.warning(self, "No variable", "Please select a variable")
             return
-        
+
         d2vals = self.model.get_d2vals(vname)
         if not d2vals:
             QMessageBox.warning(self, "No dims", f"There are no dimensions for {vname}")
             return
 
-        dialog = DimensionSelectorDialog(d2vals, self.model.get_d2type(), self.model.get_dims(), parent=self.parent)
+        dialog = DimensionSelectorDialog(
+            d2vals, self.model.get_d2type(), self.model.get_dims(), parent=self.parent
+        )
         if dialog.exec() == QDialog.DialogCode.Accepted:
             selected_values = dialog.get_values()
             self.model.set_dims(selected_values)
-
 
 
 class DimensionSelectorDialog(QDialog):
@@ -287,13 +284,15 @@ class DimensionSelectorDialog(QDialog):
         self.setWindowTitle("Select Dimension values")
 
         # maps dim name to widget (QComboBox or QLineEdit)
-        self.inputs = {} 
+        self.inputs = {}
 
         # maps dim name to the type of the values
         self.d2type = d2type
 
         # need to set up buttons now because if line_edit is used then disable Ok button until input
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
         ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
         ok_button.setEnabled(True)
 
@@ -317,12 +316,16 @@ class DimensionSelectorDialog(QDialog):
                 line_edit = QLineEdit()
                 line_edit.setPlaceholderText(f"Enter {d} value")
                 line_edit.setValidator(
-                    QRegularExpressionValidator(QRegularExpression(f"^({'|'.join(map(str, vals))})$"))
+                    QRegularExpressionValidator(
+                        QRegularExpression(f"^({'|'.join(map(str, vals))})$")
+                    )
                 )
                 grid.addWidget(line_edit, row, 1)
                 self.inputs[d] = line_edit
-                line_edit.textChanged.connect(lambda _: 
-                    ok_button.setEnabled(bool(line_edit.text().strip()) and line_edit.hasAcceptableInput())
+                line_edit.textChanged.connect(
+                    lambda _: ok_button.setEnabled(
+                        bool(line_edit.text().strip()) and line_edit.hasAcceptableInput()
+                    )
                 )
                 ok_button.setEnabled(False)
 
@@ -341,4 +344,3 @@ class DimensionSelectorDialog(QDialog):
             v = widget.currentText() if isinstance(widget, QComboBox) else widget.text()
             vals[dim] = self.d2type[dim](v)
         return vals
-
