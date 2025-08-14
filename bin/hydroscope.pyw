@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 
+import os
 import sys
 import re
 import pathlib
+import configparser
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -46,8 +48,12 @@ class Window(QMainWindow):
         except Exception:
             pass
 
-        # we need proper project stuff, but in the meantime hack this in
-        self.lastdir = pathlib.Path(platformdirs.user_downloads_dir())
+        # config file
+        dirs = platformdirs.PlatformDirs('Hydroscope', 'NIWA')
+        self.cdir = cdir = pathlib.Path(dirs.user_data_dir)
+        os.makedirs(cdir, mode=0o755, exist_ok=True)
+        self.cfile = cdir / 'config.ini'
+        self.load_config()
 
         # the model
         self.model = model.Model()
@@ -57,11 +63,22 @@ class Window(QMainWindow):
 
         updates.possibly_update(self)
 
-    def set_lastdir(self, p):
-        self.lastdir = p
+    def load_config(self):
+        # put in default config file if necessary
+        if not self.cfile.exists():
+            cp = configparser.ConfigParser()
+            cp['DEFAULT'] = {
+                'lastdir': platformdirs.user_downloads_dir()
+            }
+            with open(self.cfile, 'w') as cfh:
+                cp.write(cfh)
 
-    def get_lastdir(self):
-        return self.lastdir
+        self.cp = configparser.ConfigParser()
+        self.cp.read(self.cfile)
+
+    def save_config(self):
+        with open(self.cfile, 'w') as cfh:
+            self.cp.write(cfh)
 
     def __create_menus(self):
         bar = self.menuBar()
