@@ -46,15 +46,15 @@ def check_for_updates(parent):
             lab = QLabel("Installable versions:")
             lab.setToolTip("Click to install this version")
             grid.addWidget(lab, 2, 0)
-            for i, v in enumerate(ivers):
+            for i, vnu in enumerate(ivers):
                 # grid.addWidget(QLabel(v), i+2, 1)
-                btn = QPushButton(v)
+                btn = QPushButton(vnu['version'])
                 btn.setFlat(True)  # Makes it look like a label
                 btn.setStyleSheet(
                     "text-align: left; color: blue; text-decoration: underline; background: none; border: none;"
                 )
                 btn.clicked.connect(
-                    lambda _, ver=v: possibly_update_to_version(parent, "Update?", cver, ver)
+                    lambda _, vnu=vnu: possibly_update_to_version(parent, "Update?", cver, vnu)
                 )
                 grid.addWidget(btn, i + 2, 1)
 
@@ -69,18 +69,24 @@ def check_for_updates(parent):
     dia.exec()
 
 
-def download_version(v: str):
-    """Return installer path and the done_event when download finished"""
+def download_version(vnu: dict):
+    """Return installer path and the done_event when download finished
+
+    Parameters
+    ----------
+    vnu: dict
+        {'version', 'name', 'url'}
+
+    """
     done_event = threading.Event()
     errors = []
 
-    url = f"https://raw.githubusercontent.com/niwa/hydroscope/main/Output/hydroscopesetup-{v}.exe"
     ddir = pathlib.Path(platformdirs.user_downloads_dir())
-    installer = ddir / f"hydroscopesetup-{v}.exe"
+    installer = ddir / vnu['name']
 
     def download():
         try:
-            with requests.get(url, stream=True) as r:
+            with requests.get(vnu['url'], stream=True) as r:
                 r.raise_for_status()
                 with open(installer, "wb") as f:
                     for chunk in r.iter_content(chunk_size=8192):
@@ -97,10 +103,11 @@ def download_version(v: str):
 
 def possibly_update_to_version(parent, title, old, new):
     """Confirm we want to update from old to new, then do it"""
-    if version.parse(new) <= version.parse(old):
-        m = f"Version {new} isn't newer than {old}, are you sure you want to install it?"
+
+    if version.parse(new['version']) <= version.parse(old):
+        m = f"Version {new['version']} isn't newer than {old}, are you sure you want to install it?"
     else:
-        m = f"Upgrade to version {new}?"
+        m = f"Upgrade to version {new['version']}?"
 
     # Start download
     installer, done_event, errors = download_version(new)
@@ -123,7 +130,7 @@ def possibly_update_to_version(parent, title, old, new):
 def possibly_update(parent):
     cver = get_prog_version()
     ivers = get_installable_versions()
-    if not (cver and ivers) or version.parse(cver) >= version.parse(ivers[0]):
+    if not (cver and ivers) or version.parse(cver) >= version.parse(ivers[0]['version']):
         return
     possibly_update_to_version(parent, "New version available", cver, ivers[0])
 
@@ -177,19 +184,23 @@ def get_github_version():
     except Exception:
         return None
 
-
 def get_installable_versions():
-    url = "https://api.github.com/repos/niwa/hydroscope/git/trees/main?recursive=1"
+    """Return a sorted list of [{'version': version, 'name': name, 'url': url}]"""
+
+    url = f"https://api.github.com/repos/niwa/hydroscope/releases"
+    headers = {"Accept": "application/vnd.github+json"}
+
     try:
-        r = requests.get(url, timeout=10)
+        r = requests.get(url, headers=headers)
         r.raise_for_status()
-        v = [
-            e["path"].split("-")[-1].removesuffix(".exe")
-            for e in r.json()["tree"]
-            if e["path"].startswith("Output/")
-        ]
-        return sorted(v, key=version.Version, reverse=True)
+        releases = []
+        for release in r.json():
+            releases.append({
+                'version': release["tag_name"],
+                'name':  release["assets"][0]["name"],
+                'url': release["assets"][0]["browser_download_url"]
+            })
     except Exception:
-        return None
+        return []
 
-
+    return sorted(releases, key=lambda i: version.Version(i['version']), reverse=True)
