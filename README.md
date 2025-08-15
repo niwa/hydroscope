@@ -37,7 +37,7 @@ it).  Then inno to turn this into a MSI installer.
 
 4. If you want to rebuild the hydroscope.spec file run
    ```
-   pyinstaller -y bin/hydroscope.pyw --onedir --noconsole --hidden-import netCDF4 --add-data="bin/version.txt;." --add-data="bin/help.html;." --icon="etc/hydroscope.ico" --add-data="etc/hydroscope.ico;."
+   pyinstaller -y bin/hydroscope.pyw --onedir --noconsole --hidden-import netCDF4 --add-data="bin/version.txt;." --add-data="bin/help.html;." --add-data="etc/metrics.json;." --icon="etc/hydroscope.ico" --add-data="etc/hydroscope.ico;."
    ```
    Using --onefile makes a single executable hydroscope.exe which is neat and tidy
    but it is slower to run than having the entire directory, so --onedir is the

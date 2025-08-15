@@ -5,7 +5,7 @@ a = Analysis(
     ['bin\\hydroscope.pyw'],
     pathex=[],
     binaries=[],
-    datas=[('bin/version.txt', '.'), ('bin/help.html', '.'), ('etc/hydroscope.ico', '.')],
+    datas=[('bin/version.txt', '.'), ('bin/help.html', '.'), ('etc/metrics.json', '.'), ('etc/hydroscope.ico', '.')],
     hiddenimports=['netCDF4'],
     hookspath=[],
     hooksconfig={},
