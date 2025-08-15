@@ -19,7 +19,7 @@ from PyQt6.QtGui import (
 import platformdirs
 import utils
 import updates
-import model
+import sourcedata
 
 class Window(QMainWindow):
 
@@ -47,7 +47,10 @@ class Window(QMainWindow):
         self.load_config()
 
         # the model
-        self.model = model.Model()
+        self.model = sourcedata.SourceData()
+
+        # the obs
+        self.obs = sourcedata.SourceData()
 
         self.setCentralWidget(self.__create_main())
         self.__create_menus()
@@ -96,14 +99,12 @@ class Window(QMainWindow):
         widget = QWidget()
         vbox = QVBoxLayout(widget)
 
-        md = model.ModelWidget(self.model, self)
+        md = sourcedata.SourceDataWidget(self.model, title='Model', parent=self)
         vbox.addWidget(md)
 
-        # Obs
-        title = QLabel("Observations")
-        hbox = QHBoxLayout()
-        vbox.addWidget(title)
-        vbox.addLayout(hbox)
+        od = sourcedata.SourceDataWidget(self.obs, title='Obs', parent=self)
+        vbox.addWidget(od)
+
 
         # Metrics
         title = QLabel("Purpose and metrics")

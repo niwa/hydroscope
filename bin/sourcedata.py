@@ -31,7 +31,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 
-class Model:
+class SourceData:
     def __init__(self):
         self.fn = None
         self.data = None  # pd.DataFrame or xr.Dataset
@@ -101,7 +101,7 @@ class Model:
             return
 
         if v not in self.vars:
-            raise ValueError(f"Variable {v} does not exist in currently selected model file")
+            raise ValueError(f"Variable {v} does not exist in currently selected file")
 
         self.var = v
         self.__set_series()
@@ -134,11 +134,12 @@ class Model:
         return self.series
 
 
-class ModelWidget(QWidget):
+class SourceDataWidget(QWidget):
 
-    def __init__(self, model: Model, parent=None):
+    def __init__(self, sd: SourceData, title='Model', parent=None):
         super().__init__(parent)
-        self.model = model
+        self.sd = sd
+        self.title = title
         self.parent = parent
         self.init_ui()
 
@@ -146,16 +147,16 @@ class ModelWidget(QWidget):
         vbox = QVBoxLayout(self)
 
         # Title
-        title = QLabel("Model output")
+        title = QLabel(f"{self.title} output")
         vbox.addWidget(title)
 
         # Horizontal layout
         hbox = QHBoxLayout()
 
-        # Model output file
+        # Model/obs output file
         hbox.addWidget(QLabel("File:"))
         self.fn_le = lab = utils.ClickableLineEdit("Click to select file", char_width=15)
-        lab.clicked.connect(self.select_model_file)
+        lab.clicked.connect(self.select_sourcedata_file)
         hbox.addWidget(lab)
 
         # Variable label and dropdown
@@ -178,7 +179,7 @@ class ModelWidget(QWidget):
 
         vbox.addLayout(hbox)
 
-    def select_model_file(self):
+    def select_sourcedata_file(self):
         fname, _ = QFileDialog.getOpenFileName(
             self,
             "Select a file",
@@ -197,18 +198,18 @@ class ModelWidget(QWidget):
         self.vars_cb.clear()
         self.dims_btn.setEnabled(fname.suffix.lower() == ".nc")
 
-        # inform model about new file
+        # inform model/obs about new file
         try:
-            self.model.read_fn(fname)
-            self.vars_cb.addItems(self.model.get_vars())
+            self.sd.read_fn(fname)
+            self.vars_cb.addItems(self.sd.get_vars())
         except Exception as e:
-            self.fn_le.setText("Click to select model")
+            self.fn_le.setText("Click to select file")
             self.vars_cb.clear()
             self.dims_btn.setEnabled(False)
             QMessageBox.critical(self, "Error", f"Could not parse {fname}:\n{e}")
 
     def view_series(self):
-        s = self.model.get_series()
+        s = self.sd.get_series()
         if s is None:
             QMessageBox.warning(self, "No variable", "File/variable/dimension must be all set")
             return
@@ -221,7 +222,7 @@ class ModelWidget(QWidget):
                 layout = QVBoxLayout(self)
 
                 # dim string
-                dims = parent.model.get_dims()
+                dims = parent.sd.get_dims()
                 if dims:
                     dstr = [f"{dim}={val}" for dim, val in dims.items()]
                     dstr = f" ({','.join(dstr)})"
@@ -231,7 +232,7 @@ class ModelWidget(QWidget):
                 # Create Matplotlib Figure
                 fig, ax = plt.subplots()
                 series.plot(ax=ax)
-                ax.set_title(f"{parent.model.var}{dstr}")
+                ax.set_title(f"{parent.sd.var}{dstr}")
                 ax.set_xlabel("Time")
                 ax.set_ylabel("Value")
 
@@ -242,11 +243,11 @@ class ModelWidget(QWidget):
                 b.accepted.connect(self.accept)
                 layout.addWidget(b)
 
-        d = PlotDialog(self.parent, s)
+        d = PlotDialog(self, s)
         d.exec()
 
     def set_var(self, v):
-        self.model.set_var(v)
+        self.sd.set_var(v)
 
     def set_dims(self):
         vname = self.vars_cb.currentText()
@@ -254,17 +255,17 @@ class ModelWidget(QWidget):
             QMessageBox.warning(self, "No variable", "Please select a variable")
             return
 
-        d2vals = self.model.get_d2vals(vname)
+        d2vals = self.sd.get_d2vals(vname)
         if not d2vals:
             QMessageBox.warning(self, "No dims", f"There are no dimensions for {vname}")
             return
 
         dialog = DimensionSelectorDialog(
-            d2vals, self.model.get_d2type(), self.model.get_dims(), parent=self.parent
+            d2vals, self.sd.get_d2type(), self.sd.get_dims(), parent=self.parent
         )
         if dialog.exec() == QDialog.DialogCode.Accepted:
             selected_values = dialog.get_values()
-            self.model.set_dims(selected_values)
+            self.sd.set_dims(selected_values)
 
 
 class DimensionSelectorDialog(QDialog):
