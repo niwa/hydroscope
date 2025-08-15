@@ -1,32 +1,6 @@
-import re
 import pathlib
 import json
-from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QComboBox,
-    QFileDialog,
-    QMessageBox,
-    QDialog,
-    QLineEdit,
-    QDialogButtonBox,
-    QGridLayout,
-    QGroupBox
-)
-
-from PyQt6.QtGui import (
-    QRegularExpressionValidator,
-)
-from PyQt6.QtCore import (
-    QRegularExpression,
-)
-import utils
-import pandas as pd
-import xarray as xr
-
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QComboBox, QGroupBox
 
 
 class MetricsWidget(QGroupBox):
@@ -47,5 +21,5 @@ class MetricsWidget(QGroupBox):
         pcb.addItems(list(self.p2m.keys()))
         hbox.addWidget(pcb)
 
-        title = QLabel(f"blahdfsfds")
+        title = QLabel("blahdfsfds")
         hbox.addWidget(title)
