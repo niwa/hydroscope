@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout, QHBoxLayout,
     QLabel,
+    QGroupBox
 )
 from PyQt6.QtGui import (
     QAction,
@@ -20,6 +21,7 @@ import platformdirs
 import utils
 import updates
 import sourcedata
+import metrics
 
 class Window(QMainWindow):
 
@@ -102,21 +104,23 @@ class Window(QMainWindow):
         md = sourcedata.SourceDataWidget(self.model, title='Model', parent=self)
         vbox.addWidget(md)
 
-        od = sourcedata.SourceDataWidget(self.obs, title='Obs', parent=self)
+        od = sourcedata.SourceDataWidget(self.obs, title='Observations', parent=self)
         vbox.addWidget(od)
 
-
-        # Metrics
-        title = QLabel("Purpose and metrics")
-        hbox = QHBoxLayout()
-        vbox.addWidget(title)
-        vbox.addLayout(hbox)
+        if getattr(sys, "frozen", False):
+            fname = pathlib.Path(sys._MEIPASS) / "metrics.json"
+        else:
+            me = pathlib.Path(sys.argv[0]).resolve()
+            fname = me.parent.parent / "etc" / "metrics.json"
+        metbox = metrics.MetricsWidget('Purpose and metrics', fname)
+        vbox.addWidget(metbox)
 
         # Results
-        title = QLabel("Results")
-        hbox = QHBoxLayout()
-        vbox.addWidget(title)
-        vbox.addLayout(hbox)
+        b = QGroupBox("Results")
+        bl = QHBoxLayout(b)
+        bl.addWidget(QLabel("blah blah"))
+        bl.addWidget(QLabel("more stuff"))
+        vbox.addWidget(b)
 
         return widget
     

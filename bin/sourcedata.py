@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QDialogButtonBox,
     QGridLayout,
+    QGroupBox
 )
 
 from PyQt6.QtGui import (
@@ -134,24 +135,19 @@ class SourceData:
         return self.series
 
 
-class SourceDataWidget(QWidget):
+class SourceDataWidget(QGroupBox):
 
     def __init__(self, sd: SourceData, title='Model', parent=None):
-        super().__init__(parent)
+        super().__init__(title, parent=parent)
         self.sd = sd
         self.title = title
         self.parent = parent
         self.init_ui()
 
     def init_ui(self):
-        vbox = QVBoxLayout(self)
-
-        # Title
-        title = QLabel(f"{self.title} output")
-        vbox.addWidget(title)
 
         # Horizontal layout
-        hbox = QHBoxLayout()
+        hbox = QHBoxLayout(self)
 
         # Model/obs output file
         hbox.addWidget(QLabel("File:"))
@@ -176,8 +172,6 @@ class SourceDataWidget(QWidget):
         view_btn = QPushButton("View")
         view_btn.clicked.connect(self.view_series)
         hbox.addWidget(view_btn)
-
-        vbox.addLayout(hbox)
 
     def select_sourcedata_file(self):
         fname, _ = QFileDialog.getOpenFileName(

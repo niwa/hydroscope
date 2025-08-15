@@ -1,0 +1,5 @@
+{
+	"Low flows": ["NSE", "Bias"],
+	"Mid flows": ["NSE", "MSE"],
+	"High flows": ["CRPS", "MAE"]
+}
