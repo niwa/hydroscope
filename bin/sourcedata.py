@@ -1,5 +1,6 @@
 import re
 import pathlib
+import json
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -144,6 +145,16 @@ class SourceDataWidget(QGroupBox):
         self.parent = parent
         self.init_ui()
 
+        # if we had a previous file, load it
+        fname = self.parent.cp["DEFAULT"].get(f"{self.title}_fname")
+        if fname and (fname := pathlib.Path(fname)) and fname.exists():
+            self._new_sourcedata_file(fname)
+
+        # setting the variable currently doesn't work since after setting file the variables are reset
+        #v = self.parent.cp["DEFAULT"].get(f"{self.title}_var")
+        #if v and v in self.sd.get_vars():
+        #    self.sd.set_var(v)
+
     def init_ui(self):
 
         # Horizontal layout
@@ -187,6 +198,12 @@ class SourceDataWidget(QGroupBox):
         self.parent.cp["DEFAULT"]["lastdir"] = str(fname.parent)
         self.parent.save_config()
 
+        # store fname
+        self.parent.cp["DEFAULT"][f"{self.title}_fname"] = str(fname)
+
+        self._new_sourcedata_file(fname)
+
+    def _new_sourcedata_file(self, fname: pathlib.Path):
         # update GUI
         self.fn_le.setText(fname.name)
         self.vars_cb.clear()
@@ -241,6 +258,7 @@ class SourceDataWidget(QGroupBox):
         d.exec()
 
     def set_var(self, v):
+        self.parent.cp["DEFAULT"][f"{self.title}_var"] = v
         self.sd.set_var(v)
 
     def set_dims(self):
@@ -259,6 +277,7 @@ class SourceDataWidget(QGroupBox):
         )
         if dialog.exec() == QDialog.DialogCode.Accepted:
             selected_values = dialog.get_values()
+            self.parent.cp["DEFAULT"][f"{self.title}_dims"] = json.dumps(selected_values)
             self.sd.set_dims(selected_values)
 
 

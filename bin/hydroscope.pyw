@@ -11,7 +11,8 @@ from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout, QHBoxLayout,
     QLabel,
-    QGroupBox
+    QGroupBox,
+    QMessageBox
 )
 from PyQt6.QtGui import (
     QAction,
@@ -22,6 +23,7 @@ import utils
 import updates
 import sourcedata
 import metrics
+import results
 
 class Window(QMainWindow):
 
@@ -54,6 +56,14 @@ class Window(QMainWindow):
         # the obs
         self.obs = sourcedata.SourceData()
 
+        # the results logic
+        if getattr(sys, "frozen", False):
+            fname = pathlib.Path(sys._MEIPASS) / "metrics.json"
+        else:
+            me = pathlib.Path(sys.argv[0]).resolve()
+            fname = me.parent.parent / "etc" / "metrics.json"
+        self.results = results.Results(fname)
+
         self.setCentralWidget(self.__create_main())
         self.__create_menus()
 
@@ -81,6 +91,9 @@ class Window(QMainWindow):
 
         menu = QMenu("&File", self)
         bar.addMenu(menu)
+        action = QAction("&Save", self)
+        action.triggered.connect(self.save_config)
+        menu.addAction(action)
         action = QAction("&Quit", self)
         action.triggered.connect(self.close)
         menu.addAction(action)
@@ -112,18 +125,23 @@ class Window(QMainWindow):
         else:
             me = pathlib.Path(sys.argv[0]).resolve()
             fname = me.parent.parent / "etc" / "metrics.json"
-        metbox = metrics.MetricsWidget('Purpose and metrics', fname)
+        metbox = metrics.MetricsWidget('Purpose and metrics', fname, self)
         vbox.addWidget(metbox)
 
         # Results
-        b = QGroupBox("Results")
-        bl = QHBoxLayout(b)
-        bl.addWidget(QLabel("blah blah"))
-        bl.addWidget(QLabel("more stuff"))
-        vbox.addWidget(b)
+        self.rd = rd = results.ResultsWidget(self.results, title='Results', parent=self)
+        vbox.addWidget(rd)
 
         return widget
     
+    def calculate(self, metric: str):
+        """Calculate the given metric if possible"""
+        m = self.model.get_series()
+        o = self.obs.get_series()
+        if m is None or o is None:
+            QMessageBox.warning(self, "No data", "Need model and obs data defined first")
+            return
+        self.rd.calculate(metric, m, o)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

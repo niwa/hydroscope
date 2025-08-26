@@ -1,5 +1,24 @@
 {
-	"Low flows": ["NSE", "Bias"],
-	"Mid flows": ["NSE", "MSE"],
-	"High flows": ["CRPS", "MAE"]
+	"purpose": {
+		"Low flows": ["NSE", "Bias"],
+		"Mid flows": ["NSE", "MSE"],
+		"High flows": ["CRPS", "MAE"]
+	},
+	"metric": {
+		"Bias" : {
+			"method": "bias"
+		},
+		"MAE" : {
+			"method": "mae"
+		},
+		"MSE" : {
+			"method": "mse"
+		},
+		"NSE" : {
+			"method": "nse"
+		},
+		"CRPS" : {
+			"method": "mse"
+		}
+	}
 }
