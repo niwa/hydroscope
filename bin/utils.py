@@ -6,20 +6,10 @@ from PyQt6.QtWidgets import (
     QDialogButtonBox,
     QVBoxLayout,
     QTextEdit,
+    QLineEdit,
 )
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import (
-    QApplication, QWidget, QLabel, QFileDialog, QVBoxLayout
-)
-from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtGui import QCursor
-import sys
-
-from PyQt6.QtWidgets import (
-    QApplication, QWidget, QLineEdit, QFileDialog, QVBoxLayout
-)
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QCursor, QMouseEvent, QFontMetrics
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QCursor, QFontMetrics
 
 
 def msg(parent, title, fname):
@@ -63,16 +53,15 @@ def msg(parent, title, fname):
 class ClickableLineEdit(QLineEdit):
     clicked = pyqtSignal()
 
-    def __init__(self, text='', char_width=15, parent=None):
+    def __init__(self, text="", char_width=15, parent=None):
         super().__init__(text, parent)
         self.setReadOnly(True)
         self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
         # Set fixed width based on character count
         font_metrics = QFontMetrics(self.font())
-        width = font_metrics.horizontalAdvance('X' * char_width) + 10
+        width = font_metrics.horizontalAdvance("X" * char_width) + 10
         self.setFixedWidth(width)
 
     def mousePressEvent(self, event):
         self.clicked.emit()
-

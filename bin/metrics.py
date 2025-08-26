@@ -10,7 +10,7 @@ class MetricsWidget(QGroupBox):
         super().__init__(title)
         self.parent = parent
         with open(data, "r") as f:
-            self.p2m = json.load(f)['purpose']
+            self.p2m = json.load(f)["purpose"]
         self.init_ui()
 
     def init_ui(self):
@@ -59,5 +59,3 @@ class MetricsWidget(QGroupBox):
     def calculate(self):
         m = self.metric_cb.currentText()
         self.parent.calculate(m)
-
-

@@ -1,8 +1,16 @@
 import re
 import pathlib
 import json
+import utils
+import pandas as pd
+import xarray as xr
+import matplotlib
+
+matplotlib.use("QtAgg")
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+
 from PyQt6.QtWidgets import (
-    QWidget,
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
@@ -14,23 +22,11 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QDialogButtonBox,
     QGridLayout,
-    QGroupBox
+    QGroupBox,
 )
 
-from PyQt6.QtGui import (
-    QRegularExpressionValidator,
-)
-from PyQt6.QtCore import (
-    QRegularExpression,
-)
-import utils
-import pandas as pd
-import xarray as xr
-import matplotlib
-
-matplotlib.use("QtAgg")
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from PyQt6.QtGui import QRegularExpressionValidator
+from PyQt6.QtCore import QRegularExpression
 
 
 class SourceData:
@@ -138,7 +134,7 @@ class SourceData:
 
 class SourceDataWidget(QGroupBox):
 
-    def __init__(self, sd: SourceData, title='Model', parent=None):
+    def __init__(self, sd: SourceData, title="Model", parent=None):
         super().__init__(title, parent=parent)
         self.sd = sd
         self.title = title
@@ -151,8 +147,8 @@ class SourceDataWidget(QGroupBox):
             self._new_sourcedata_file(fname)
 
         # setting the variable currently doesn't work since after setting file the variables are reset
-        #v = self.parent.cp["DEFAULT"].get(f"{self.title}_var")
-        #if v and v in self.sd.get_vars():
+        # v = self.parent.cp["DEFAULT"].get(f"{self.title}_var")
+        # if v and v in self.sd.get_vars():
         #    self.sd.set_var(v)
 
     def init_ui(self):
