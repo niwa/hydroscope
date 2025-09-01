@@ -22,7 +22,7 @@ import platformdirs
 import utils
 import updates
 import sourcedata
-import metrics
+import purpose
 import results
 
 class Window(QMainWindow):
@@ -125,7 +125,7 @@ class Window(QMainWindow):
         else:
             me = pathlib.Path(sys.argv[0]).resolve()
             fname = me.parent.parent / "etc" / "metrics.json"
-        metbox = metrics.MetricsWidget('Purpose and metrics', fname, self)
+        metbox = purpose.PurposeWidget('Purpose and metrics', fname, self)
         vbox.addWidget(metbox)
 
         # Results
@@ -134,14 +134,14 @@ class Window(QMainWindow):
 
         return widget
     
-    def calculate(self, metric: str):
+    def calculate(self, purp: str):
         """Calculate the given metric if possible"""
         m = self.model.get_series()
         o = self.obs.get_series()
         if m is None or o is None:
             QMessageBox.warning(self, "No data", "Need model and obs data defined first")
             return
-        self.rd.calculate(metric, m, o)
+        self.rd.calculate(purp, m, o)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
