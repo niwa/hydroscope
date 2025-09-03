@@ -22,6 +22,7 @@ from PyQt6.QtGui import (
     QAction,
     QIcon
 )
+from PyQt6.QtCore import QTimer
 import platformdirs
 import utils
 import updates
@@ -71,7 +72,8 @@ class Window(QMainWindow):
         self.setCentralWidget(self.__create_main())
         self.__create_menus()
 
-        updates.possibly_update(self)
+        # I think this ensures that the main window is displayed before doing update dialog, which helps visibility
+        QTimer.singleShot(0, lambda : updates.possibly_update(self))
 
     def load_config(self):
         # put in default config file if necessary
@@ -154,20 +156,34 @@ class Window(QMainWindow):
                 btns.rejected.connect(self.reject)
                 layout = QFormLayout()
 
-
-
                 cp = parent.cp["DEFAULT"]
 
                 self.peak_num = num = QLineEdit()
                 if val := cp.get("peak_num", "10"):
                     num.setText(val)
+                num.setToolTip("Number of high flow peaks to analyse")
 
                 self.peak_gap = pg = QLineEdit()
                 if val := cp.get("peak_gap", "7"):
                     pg.setText(val)
+                pg.setToolTip("Minimum number of days between high flow peaks")
 
                 layout.addRow("Peaks:", num)
                 layout.addRow("Peak gap (days):", pg)
+
+                self.bfi_alpha = bfi = QLineEdit()
+                if val := cp.get("bfi_alpha", "0.925"):
+                    bfi.setText(val)
+                bfi.setToolTip("Alpha filter parameter for BFI Lyne and Hollick filter")
+
+                self.bfi_np = np = QLineEdit()
+                if val := cp.get("bfi_np", "3"):
+                    np.setText(val)
+                np.setToolTip("Number of filter passes for BFI Lyne and Hollick filter")
+
+                layout.addRow("BFI alpha:", bfi)
+                layout.addRow("BFI passes:", np)
+
                 layout.addWidget(btns)
                 self.setLayout(layout)
 
@@ -177,19 +193,40 @@ class Window(QMainWindow):
                     QMessageBox.critical(self, "Error", "Specify number and width of peaks")
                     return False
               
+                if not (self.bfi_alpha.text() and self.bfi_np.text()):
+                    QMessageBox.critical(self, "Error", "Specify BFI alpha and number of passes")
+                    return False
+              
                 try:
                     n = int(self.peak_num.text())
                     p = int(self.peak_gap.text())
+                    bn = int(self.bfi_np.text())
                 except Exception as exp:
-                    QMessageBox.critical(self, "Error", "Peak number and width must be integers")
+                    QMessageBox.critical(self, "Error", "Peak number and width and BFI passes must be integers")
+                    return False
+             
+                try:
+                    ba = float(self.bfi_alpha.text())
+                except Exception as exp:
+                    QMessageBox.critical(self, "Error", "BFI alpha must be a float")
                     return False
              
                 if n < 1 or p < 1:
                     QMessageBox.critical(self, "Error", "Peak number and width must be positive")
                     return False
 
+                if bn < 1:
+                    QMessageBox.critical(self, "Error", "BFI passes must be positive")
+                    return False
+
+                if ba <= 0 or ba >= 1:
+                    QMessageBox.critical(self, "Error", "BFI alpha must be in (0, 1)")
+                    return False
+
                 self.parent.cp["DEFAULT"]["peak_num"] = str(n)
                 self.parent.cp["DEFAULT"]["peak_gap"] = str(p)
+                self.parent.cp["DEFAULT"]["bfi_alpha"] = str(ba)
+                self.parent.cp["DEFAULT"]["bfi_np"] = str(bn)
                 self.parent.save_config()
 
                 return super().accept()

@@ -115,7 +115,9 @@ class Results:
         )
 
     def __bfi(self, f: np.array):
-        return baseflow_index(f, alpha=0.925, n_passes=3) 
+        a = float(self.cp.get('bfi_alpha', 0.925))
+        n = int(self.cp.get('bfi_np', 1))
+        return baseflow_index(f, alpha=a, n_passes=n) 
 
     def sbfi(self, sim: pd.Series, obs: pd.Series):
         return self.__bfi(sim.values)
@@ -164,8 +166,8 @@ class Results:
         pd.DataFrame
             obs_time, obs_val, sim_time, sim_val
         """
-        peak_num = int(self.cp['peak_num'])
-        peak_gap = int(self.cp['peak_gap']) * 24 * 60 * 60
+        peak_num = int(self.cp.get('peak_num', 4))
+        peak_gap = int(self.cp.get('peak_gap', 7)) * 24 * 60 * 60
 
         # get the timestep in seconds
         try:
