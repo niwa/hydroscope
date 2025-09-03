@@ -6,3 +6,7 @@ requests==2.32.4
 platformdirs==4.3.8
 pandas==2.3.1
 xarray==2025.7.1
+matplotlib==3.10.5
+permetrics==2.0.0
+cftime==1.6.4.post1
+hydrosignatures==0.19.3

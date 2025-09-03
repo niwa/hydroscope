@@ -159,12 +159,14 @@ class SourceDataWidget(QGroupBox):
         # Model/obs output file
         hbox.addWidget(QLabel("File:"))
         self.fn_le = lab = utils.ClickableLineEdit("Click to select file", char_width=15)
+        lab.setMinimumWidth(100)
         lab.clicked.connect(self.select_sourcedata_file)
         hbox.addWidget(lab)
 
         # Variable label and dropdown
         hbox.addWidget(QLabel("Variable:"))
         self.vars_cb = cb = QComboBox()
+        cb.setMinimumWidth(100)
         cb.currentTextChanged.connect(self.set_var)
         hbox.addWidget(cb)
 

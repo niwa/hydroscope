@@ -57,12 +57,15 @@ class Results:
 
     # metrics
     def lognse(self, sim: pd.Series, obs: pd.Series):
+        if (sim <= 0).any() or (obs <= 0).any():
+            return np.nan
         return self.nse(np.log(sim), np.log(obs))
 
     def nse(self, sim: pd.Series, obs: pd.Series):
         obs = obs.values
         sim = sim.values
-        return 1 - np.sum((obs - sim) ** 2) / np.sum((obs - np.mean(obs)) ** 2)
+        denom = np.sum((obs - np.mean(obs)) ** 2)
+        return (1 - np.sum((obs - sim) ** 2) / denom) if denom != 0 else np.inf
 
     def mae(self, sim: pd.Series, obs: pd.Series):
         obs = obs.values
@@ -82,37 +85,18 @@ class Results:
     def pbias(self, sim: pd.Series, obs: pd.Series):
         obs = obs.values
         sim = sim.values
-        return 100 * np.sum(sim - obs) / np.sum(obs)
+        return 100 * np.sum(sim - obs) / np.sum(obs) if np.sum(obs) != 0 else np.inf
 
     def rmse(self, sim: pd.Series, obs: pd.Series):
         obs = obs.values
         sim = sim.values
+        if len(obs) == len(sim) == 0:
+            return np.nan
         return RegressionMetric(obs, sim).root_mean_squared_error()
 
     def peakrmse(self, sim: pd.Series, obs: pd.Series):
         pt = self.peak_table('', sim, obs)
         return self.rmse(pt.sim_val, pt.obs_val)
-
-    def fdc(self, flows):
-        """Return flow duration curve from
-
-        Parameters
-        ----------
-        flows: np.array
-            Array of values
-
-        Returns
-        -------
-        df: pd.DataFrame
-            Dataframe with Exceedance % and Discharge columns
-        """
-
-        sorted_discharge_values = np.sort(flows)[::-1]
-        exceedence = np.arange(1.0, len(sorted_discharge_values) + 1) / len(sorted_discharge_values)
-
-        return pd.DataFrame(
-            {"Exceedence %": exceedence * 100, "Discharge (m3/s)": sorted_discharge_values}
-        )
 
     def __bfi(self, f: np.array):
         a = float(self.cp.get('bfi_alpha', 0.925))
@@ -126,7 +110,8 @@ class Results:
         return self.__bfi(obs.values)
 
     def __q95q50(self, flow: np.array):
-        return np.percentile(flow, 5) / np.percentile(flow, 50)
+        denom =  np.percentile(flow, 50)
+        return np.percentile(flow, 5) / denom if denom != 0 else np.inf
 
     def sq95q50(self, sim: pd.Series, obs: pd.Series):
         return self.__q95q50(sim.values)
@@ -156,6 +141,27 @@ class Results:
 
         pt = self.peak_table('', sim, obs)
         return np.mean(np.abs(pt.obs_time.values.astype("datetime64[ns]") - pt.sim_time.astype("datetime64[ns]")) / np.timedelta64(1, "h"))
+
+    def fdc(self, flows):
+        """Return flow duration curve from
+
+        Parameters
+        ----------
+        flows: np.array
+            Array of values
+
+        Returns
+        -------
+        df: pd.DataFrame
+            Dataframe with Exceedance % and Discharge columns
+        """
+
+        sorted_discharge_values = np.sort(flows)[::-1]
+        exceedence = np.arange(1.0, len(sorted_discharge_values) + 1) / len(sorted_discharge_values)
+
+        return pd.DataFrame(
+            {"Exceedence %": exceedence * 100, "Discharge (m3/s)": sorted_discharge_values}
+        )
 
     # tables
     def peak_table(self, purp, sim: pd.Series, obs: pd.Series):
@@ -188,6 +194,14 @@ class Results:
             # return the actual times
             times.append(s.index[top_peaks])
 
+        if len(times[0]) == 0 or len(times[1]) == 0:
+            return pd.DataFrame({
+                'obs_time': [],
+                'obs_val': [],
+                'sim_time': [],
+                'sim_val': [],
+            })
+
         obs_time = times[0]
         sim_time = [
             times[1][np.argmin(np.abs(p -  times[1]))]
@@ -203,12 +217,15 @@ class Results:
 
     def metric_table(self, purp, sim: pd.Series, obs: pd.Series):
         """Return a dataframe with the metrics and their values."""
-       
+      
         # some of the metrics need the same start and end
         start = max(sim.index.min(), obs.index.min())
         end   = min(sim.index.max(), obs.index.max())
         sim = sim.loc[start:end]
         obs = obs.loc[start:end]
+
+        if start >= end:
+            return pd.DataFrame({'Error': [f"Sim and obs don't overlap"]})
 
         mets = self.p2m[purp]['metrics']
         vals = []
@@ -218,7 +235,10 @@ class Results:
             except Exception as exp:
                 val = f"No {m['fun']} defined: {exp}"
             else:
-                val = f(sim, obs)
+                try:
+                    val = f(sim, obs)
+                except Exception as exp:
+                    val = f"{exp}"
             vals.append(val)
 
         return pd.DataFrame({'Metric': [m['name'] for m in mets], 'Value': vals})
@@ -306,13 +326,13 @@ class Results:
         return (pd.DataFrame(), fig)
 
     def get_tables(self, purp, sim, obs):
+
         dfs = []
         for t in self.p2m[purp]['tables']:
             try:
                 f = getattr(self, f"{t['fun']}")
             except Exception as exp:
-                print(exp)
-                val = pd.DataFrame([[f"No {t['fun']} defined: {exp}"]])
+                val = pd.DataFrame({'Error': [f"No {t['fun']} defined: {exp}"]})
             else:
                 val = f(purp, sim, obs)
             dfs.append(val)
@@ -336,10 +356,8 @@ class Results:
                     value = df.iloc[i, j]
                     if isinstance(value, float):
                         text = f"{value:.4g}"   # 3sf
-                    elif isinstance(value, (int, str)):
-                        text = str(value)
                     else:
-                        text = "" if pd.isna(value) else str(value)
+                        text = str(value)
 
                     item = QTableWidgetItem(text)
                     item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)  # make non-editable
@@ -372,7 +390,7 @@ class ResultsWidget(QGroupBox):
         self.title = title
         self.parent = parent
         self.init_ui()
-        self.setMinimumSize(400, 400)
+        self.setMinimumSize(500, 500)
 
     def calculate(self, purpose, model, obs):
         self.clear_tabs()
