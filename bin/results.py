@@ -87,6 +87,31 @@ class Results:
         sim = sim.values
         return RegressionMetric(obs, sim).root_mean_squared_error()
 
+    def peakrmse(self, sim: pd.Series, obs: pd.Series):
+        pt = self.peak_table('', sim, obs)
+        return self.rmse(pt.sim_val, pt.obs_val)
+
+    def fdc(self, flows):
+        """Return flow duration curve from
+
+        Parameters
+        ----------
+        flows: np.array
+            Array of values
+
+        Returns
+        -------
+        df: pd.DataFrame
+            Dataframe with Exceedance % and Discharge columns
+        """
+
+        sorted_discharge_values = np.sort(flows)[::-1]
+        exceedence = np.arange(1.0, len(sorted_discharge_values) + 1) / len(sorted_discharge_values)
+
+        return pd.DataFrame(
+            {"Exceedence %": exceedence * 100, "Discharge (m3/s)": sorted_discharge_values}
+        )
+
     def fdc_segment_bias(self, sim: np.array, obs: np.array, lo, hi):
         qlo = np.quantile(obs, 1-hi)
         qhi = np.quantile(obs, 1-lo)
@@ -209,6 +234,31 @@ class Results:
 
         return (df, fig)
 
+    def flow_duration_curve(self, sim: pd.Series, obs: pd.Series):
+        """Return flow duration curve from
+
+        Returns
+        -------
+        df: pd.DataFrame
+            Dataframe with Exceedance % and Discharge columns
+        """
+        
+        sfdc = self.fdc(sim.values)
+        ofdc = self.fdc(obs.values)
+
+        fig = matplotlib.figure.Figure(constrained_layout=True)
+        ax = fig.add_subplot(111)
+        sfdc.plot(x="Exceedence %", y="Discharge (m3/s)", ax=ax, color="red")#, legend='sim')
+        ofdc.plot(x="Exceedence %", y="Discharge (m3/s)", ax=ax, color="blue")#, legend='obs')
+        ax.set_xlabel("Exceedence %")
+        ax.set_ylabel("Discharge (m³/s)")
+        ax.legend(['sim', 'obs'])
+
+        df = pd.concat([sfdc.set_index("Exceedence %"), ofdc.set_index("Exceedence %")], axis=1).reset_index()
+        df.columns = ["Exceedence %", "sim flow", "obs flow"]
+
+        return (df, fig)
+
     def make_sine(self, sim, obs):
         fig = matplotlib.figure.Figure(constrained_layout=True)
         ax = fig.add_subplot(111)
@@ -254,7 +304,15 @@ class Results:
 
             for i in range(df.shape[0]):
                 for j in range(df.shape[1]):
-                    item = QTableWidgetItem(str(df.iloc[i, j]))
+                    value = df.iloc[i, j]
+                    if isinstance(value, float):
+                        text = f"{value:.4g}"   # 3sf
+                    elif isinstance(value, (int, str)):
+                        text = str(value)
+                    else:
+                        text = "" if pd.isna(value) else str(value)
+
+                    item = QTableWidgetItem(text)
                     item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)  # make non-editable
                     table.setItem(i, j, item)
 

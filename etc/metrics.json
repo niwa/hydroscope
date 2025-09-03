@@ -64,6 +64,10 @@
 			{
 				"name": "Hydrograph with events",
 				"fun": "hydrograph_with_events"
+			},
+			{
+				"name": "FDC",
+				"fun": "flow_duration_curve"
 			}
 		],
 		"tables": [
