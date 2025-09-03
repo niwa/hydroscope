@@ -1,24 +1,98 @@
 {
-	"purpose": {
-		"Low flows": ["NSE", "Bias"],
-		"Mid flows": ["NSE", "MSE"],
-		"High flows": ["CRPS", "MAE"]
+	"Low flow": {
+		"graphs": [
+			{
+				"name": "Sine",
+				"fun": "make_sine"
+			},
+			{
+				"name": "Scat",
+				"fun": "make_scatter"
+			}
+		],
+		"tables": [
+			{
+				"name": "Metrics",
+				"fun": "metric_table"
+			}
+		],
+		"metrics": [
+			{
+				"name": "Log-NSE",
+				"fun": "lognse"
+			},
+			{
+				"name": "FDC low segment error",
+				"fun": "flv"
+			}
+		]
 	},
-	"metric": {
-		"Bias" : {
-			"method": "bias"
-		},
-		"MAE" : {
-			"method": "mae"
-		},
-		"MSE" : {
-			"method": "mse"
-		},
-		"NSE" : {
-			"method": "nse"
-		},
-		"CRPS" : {
-			"method": "mse"
-		}
+	"Mean flow": {
+		"graphs": [
+			{
+				"name": "Sine",
+				"fun": "make_sine"
+			}
+		],
+		"tables": [
+			{
+				"name": "Metrics",
+				"fun": "metric_table"
+			}
+		],
+		"metrics": [
+			{
+				"name": "KGE",
+				"fun": "kge"
+			},
+			{
+				"name": "PBIAS",
+				"fun": "pbias"
+			},
+			{
+				"name": "MAE",
+				"fun": "mae"
+			},
+			{
+				"name": "RMSE",
+				"fun": "rmse"
+			}
+		]
+	},
+	"High flow": {
+		"graphs": [
+			{
+				"name": "Hydrograph with events",
+				"fun": "hydrograph_with_events"
+			}
+		],
+		"tables": [
+			{	
+				"name": "Peaks",
+				"fun": "peak_table"
+			},
+			{
+				"name": "Metrics",
+				"fun": "metric_table"
+			}
+		],
+		"metrics": [
+			{
+				"name": "Nash-Sutcliffe efficiency",
+				"fun": "nse"
+			},
+			{
+				"name": "RMSE of peaks",
+				"fun": "peakrmse"
+			},
+			{
+				"name": "Peak timing error (hours)",
+				"fun": "pte"
+			},
+			{
+				"name": "FDC high segment error",
+				"fun": "fhv"
+			}
+		]
 	}
 }

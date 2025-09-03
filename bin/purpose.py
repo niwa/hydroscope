@@ -10,7 +10,7 @@ class PurposeWidget(QGroupBox):
         super().__init__(title)
         self.parent = parent
         with open(data, "r") as f:
-            self.purps = list(json.load(f)["purpose"].keys())
+            self.purps = list(json.load(f).keys())
         self.init_ui()
 
     def init_ui(self):

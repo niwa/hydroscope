@@ -7,9 +7,13 @@ import configparser
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
+    QDialog,
+    QDialogButtonBox,
     QMenu,
     QWidget,
     QVBoxLayout, QHBoxLayout,
+    QFormLayout,
+    QLineEdit,
     QLabel,
     QGroupBox,
     QMessageBox
@@ -62,7 +66,7 @@ class Window(QMainWindow):
         else:
             me = pathlib.Path(sys.argv[0]).resolve()
             fname = me.parent.parent / "etc" / "metrics.json"
-        self.results = results.Results(fname)
+        self.results = results.Results(self.cp["DEFAULT"], fname)
 
         self.setCentralWidget(self.__create_main())
         self.__create_menus()
@@ -93,6 +97,9 @@ class Window(QMainWindow):
         bar.addMenu(menu)
         action = QAction("&Save", self)
         action.triggered.connect(self.save_config)
+        menu.addAction(action)
+        action = QAction("&Settings", self)
+        action.triggered.connect(self.__settings)
         menu.addAction(action)
         action = QAction("&Quit", self)
         action.triggered.connect(self.close)
@@ -133,7 +140,63 @@ class Window(QMainWindow):
         vbox.addWidget(rd)
 
         return widget
-    
+   
+    def __settings(self):
+        class SettingsDialog(QDialog):
+            def __init__(self, parent):
+                super().__init__(parent)
+                self.parent = parent
+                self.setWindowTitle("Settings")
+                btns = QDialogButtonBox(
+                    QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+                )
+                btns.accepted.connect(self.accept)
+                btns.rejected.connect(self.reject)
+                layout = QFormLayout()
+
+
+
+                cp = parent.cp["DEFAULT"]
+
+                self.peak_num = num = QLineEdit()
+                if val := cp.get("peak_num", "10"):
+                    num.setText(val)
+
+                self.peak_gap = pg = QLineEdit()
+                if val := cp.get("peak_gap", "7"):
+                    pg.setText(val)
+
+                layout.addRow("Peaks:", num)
+                layout.addRow("Peak gap (days):", pg)
+                layout.addWidget(btns)
+                self.setLayout(layout)
+
+            def accept(self):
+                """Test and possibly save."""
+                if not (self.peak_num.text() and self.peak_gap.text()):
+                    QMessageBox.critical(self, "Error", "Specify number and width of peaks")
+                    return False
+              
+                try:
+                    n = int(self.peak_num.text())
+                    p = int(self.peak_gap.text())
+                except Exception as exp:
+                    QMessageBox.critical(self, "Error", "Peak number and width must be integers")
+                    return False
+             
+                if n < 1 or p < 1:
+                    QMessageBox.critical(self, "Error", "Peak number and width must be positive")
+                    return False
+
+                self.parent.cp["DEFAULT"]["peak_num"] = str(n)
+                self.parent.cp["DEFAULT"]["peak_gap"] = str(p)
+                self.parent.save_config()
+
+                return super().accept()
+
+        dl = SettingsDialog(self)
+        dl.exec()
+
     def calculate(self, purp: str):
         """Calculate the given metric if possible"""
         m = self.model.get_series()
