@@ -37,6 +37,8 @@ import xarray as xr
 from scipy.signal import find_peaks
 
 from permetrics.regression import RegressionMetric
+from hydrosignatures.baseflow import baseflow, baseflow_index
+
 
 import matplotlib
 matplotlib.use("QtAgg")
@@ -111,6 +113,24 @@ class Results:
         return pd.DataFrame(
             {"Exceedence %": exceedence * 100, "Discharge (m3/s)": sorted_discharge_values}
         )
+
+    def __bfi(self, f: np.array):
+        return baseflow_index(f, alpha=0.925, n_passes=3) 
+
+    def sbfi(self, sim: pd.Series, obs: pd.Series):
+        return self.__bfi(sim.values)
+
+    def obfi(self, sim: pd.Series, obs: pd.Series):
+        return self.__bfi(obs.values)
+
+    def __q95q50(self, flow: np.array):
+        return np.percentile(flow, 5) / np.percentile(flow, 50)
+
+    def sq95q50(self, sim: pd.Series, obs: pd.Series):
+        return self.__q95q50(sim.values)
+
+    def oq95q50(self, sim: pd.Series, obs: pd.Series):
+        return self.__q95q50(obs.values)
 
     def fdc_segment_bias(self, sim: np.array, obs: np.array, lo, hi):
         qlo = np.quantile(obs, 1-hi)
@@ -203,7 +223,7 @@ class Results:
 
 
     # graphs
-    def hydrograph_with_events(self, sim: pd.Series, obs: pd.Series):
+    def __hydrograph(self, sim: pd.Series, obs: pd.Series, events=True):
 
         fig = matplotlib.figure.Figure(constrained_layout=True)
         ax = fig.add_subplot(111)
@@ -216,23 +236,30 @@ class Results:
             label.set_rotation(45)
             label.set_horizontalalignment('right')
 
-        # add in the events
-        pks = self.peak_table('', sim, obs)
-        ax.scatter(pks.obs_time.values, pks.obs_val.values, color='blue', zorder=5)
-        ax.scatter(pks.sim_time.values, pks.sim_val.values, color='red', zorder=5)
-        for i, v in zip(pks.obs_time.values, pks.obs_val.values):
-            label = pd.to_datetime(i).strftime('%Y-%m-%d')
-            ax.text(i, v, label, ha='center', color='blue', va='bottom', fontsize=8, rotation=45)
-        for i, v in zip(pks.sim_time.values, pks.sim_val.values):
-            label = pd.to_datetime(i).strftime('%Y-%m-%d')
-            ax.text(i, v, label, ha='center', color='red', va='bottom', fontsize=8, rotation=45)
-
         # make a dataframe
         df = pd.DataFrame({'obs': obs, 'sim': sim}).reset_index()
-        df['obs_event'] = df.time.isin(pks.obs_time.values)
-        df['sim_event'] = df.time.isin(pks.sim_time.values)
+
+        if events:
+            pks = self.peak_table('', sim, obs)
+            ax.scatter(pks.obs_time.values, pks.obs_val.values, color='blue', zorder=5)
+            ax.scatter(pks.sim_time.values, pks.sim_val.values, color='red', zorder=5)
+            for i, v in zip(pks.obs_time.values, pks.obs_val.values):
+                label = pd.to_datetime(i).strftime('%Y-%m-%d')
+                ax.text(i, v, label, ha='center', color='blue', va='bottom', fontsize=8, rotation=45)
+            for i, v in zip(pks.sim_time.values, pks.sim_val.values):
+                label = pd.to_datetime(i).strftime('%Y-%m-%d')
+                ax.text(i, v, label, ha='center', color='red', va='bottom', fontsize=8, rotation=45)
+
+            df['obs_event'] = df.time.isin(pks.obs_time.values)
+            df['sim_event'] = df.time.isin(pks.sim_time.values)
 
         return (df, fig)
+
+    def hydrograph(self, sim: pd.Series, obs: pd.Series):
+        return self.__hydrograph(sim, obs, events=False)
+
+    def hydrograph_with_events(self, sim: pd.Series, obs: pd.Series):
+        return self.__hydrograph(sim, obs, events=True)
 
     def flow_duration_curve(self, sim: pd.Series, obs: pd.Series):
         """Return flow duration curve from

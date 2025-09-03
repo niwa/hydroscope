@@ -2,12 +2,12 @@
 	"Low flow": {
 		"graphs": [
 			{
-				"name": "Sine",
-				"fun": "make_sine"
+				"name": "Hydrograph",
+				"fun": "hydrograph"
 			},
 			{
-				"name": "Scat",
-				"fun": "make_scatter"
+				"name": "FDC",
+				"fun": "flow_duration_curve"
 			}
 		],
 		"tables": [
@@ -22,6 +22,22 @@
 				"fun": "lognse"
 			},
 			{
+				"name": "Obs basflow index",
+				"fun": "obfi"
+			},
+			{
+				"name": "Sim basflow index",
+				"fun": "sbfi"
+			},
+			{
+				"name": "Obs Q95/Q50",
+				"fun": "oq95q50"
+			},
+			{
+				"name": "Sim Q95/Q50",
+				"fun": "sq95q50"
+			},
+			{
 				"name": "FDC low segment error",
 				"fun": "flv"
 			}
@@ -30,8 +46,12 @@
 	"Mean flow": {
 		"graphs": [
 			{
-				"name": "Sine",
-				"fun": "make_sine"
+				"name": "Hydrograph",
+				"fun": "hydrograph"
+			},
+			{
+				"name": "FDC",
+				"fun": "flow_duration_curve"
 			}
 		],
 		"tables": [
