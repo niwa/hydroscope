@@ -22,11 +22,11 @@
 				"fun": "lognse"
 			},
 			{
-				"name": "Obs basflow index",
+				"name": "Obs baseflow index",
 				"fun": "obfi"
 			},
 			{
-				"name": "Sim basflow index",
+				"name": "Sim baseflow index",
 				"fun": "sbfi"
 			},
 			{
