@@ -334,7 +334,10 @@ class Results:
             except Exception as exp:
                 val = pd.DataFrame({'Error': [f"No {t['fun']} defined: {exp}"]})
             else:
-                val = f(purp, sim, obs)
+                try:
+                    val = f(purp, sim, obs)
+                except Exception as exp:
+                    val = pd.DataFrame({'Error': [f"{exp}"]})
             dfs.append(val)
 
         ret = []
@@ -376,7 +379,10 @@ class Results:
             except Exception as exp:
                 val = [pd.DataFrame(), matplotlib.figure.Figure(constrained_layout=True)]
             else:
-                val = f(sim, obs)
+                try:
+                    val = f(sim, obs)
+                except:
+                    val = [pd.DataFrame(), matplotlib.figure.Figure(constrained_layout=True)]
             ret.append([g['name'], val[0], val[1]])
         return ret
 

@@ -50,8 +50,18 @@ class SourceData:
         # get the data and set vars
         self.fn = fn
         if fn.suffix.lower() == ".csv":
-            self.data = df = pd.read_csv(fn, index_col=0, parse_dates=[0])
+            try:
+                self.data = df = pd.read_csv(fn, index_col=0, parse_dates=[0])
+                pd.to_datetime(df.index, errors="raise")
+            except Exception as exp:
+                raise ValueError(f"Unsupported file format, please read Help menu: {exp}")
+            if pd.infer_freq(df.index) is None:
+                raise ValueError(f"First column doesn't have uniform frequency")
             self.vars = df.columns.tolist()
+            try:
+                df.apply(pd.to_numeric, errors="raise")
+            except Exception as exp:
+                raise ValueError("All defined values must be numeric")
             self.v2d = {v: [] for v in self.vars}
             self.d2vals = {}
         elif fn.suffix.lower() == ".nc":
@@ -72,7 +82,7 @@ class SourceData:
         else:
             raise ValueError("Unsupported file format")
 
-        if not self.vars:
+        if not self.vars or len(self.vars) < 1:
             raise ValueError("No variables found in file")
 
     def get_vars(self):
