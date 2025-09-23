@@ -245,16 +245,40 @@ class Results:
 
 
     # graphs
-    def __hydrograph(self, sim: pd.Series, obs: pd.Series, events=True):
+    def __hydrograph(self, sim: pd.Series, obs: pd.Series, simunits, obsunits, events=True):
 
-        fig = matplotlib.figure.Figure(constrained_layout=True)
-        ax = fig.add_subplot(111)
-        sim.plot(ax=ax, color='red')
-        obs.plot(ax=ax, color='blue')
-        ax.set_xlabel("Time")
-        ax.set_ylabel("Flow ($m^3/s$)")
-        ax.legend(['sim', 'obs'])
-        for label in ax.get_xticklabels():
+        fig = matplotlib.figure.Figure()#constrained_layout=True)
+        ax1 = fig.add_subplot(111)
+        ax2 = ax1.twinx()
+        sim.plot(ax=ax1, color='red', label='sim', legend=False)
+        obs.plot(ax=ax2, color='blue', label='obs', legend=False)
+
+        xmin = min(sim.index.min(), obs.index.min())
+        xmax = max(sim.index.max(), obs.index.max())
+        ax1.set_xlim(xmin, xmax)
+        ax1.set_xlabel("Time")
+
+        # model sim y axis
+        lab = sim.name if sim.name else "Sim"
+        if simunits:
+            lab = f"{lab} ({simunits})"
+        ax1.set_ylabel(lab, color='red')
+        ax1.tick_params(axis='y', labelcolor='red')
+
+        # obs y axis
+        lab = obs.name if obs.name else "Obs"
+        if obsunits:
+            lab = f"{lab} ({obsunits})"
+        ax2.set_ylabel(lab, color='blue')
+        ax2.tick_params(axis='y', labelcolor='blue')
+
+        # legend
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines1 + lines2, labels1 + labels2)
+
+        # x ticks rotate
+        for label in ax1.get_xticklabels():
             label.set_rotation(45)
             label.set_horizontalalignment('right')
 
@@ -263,27 +287,28 @@ class Results:
 
         if events:
             pks = self.peak_table('', sim, obs)
-            ax.scatter(pks.obs_time.values, pks.obs_val.values, color='blue', zorder=5)
-            ax.scatter(pks.sim_time.values, pks.sim_val.values, color='red', zorder=5)
-            for i, v in zip(pks.obs_time.values, pks.obs_val.values):
-                label = pd.to_datetime(i).strftime('%Y-%m-%d')
-                ax.text(i, v, label, ha='center', color='blue', va='bottom', fontsize=8, rotation=45)
+            ax1.scatter(pks.sim_time.values, pks.sim_val.values, color='red', zorder=5)
+            ax2.scatter(pks.obs_time.values, pks.obs_val.values, color='blue', zorder=5)
             for i, v in zip(pks.sim_time.values, pks.sim_val.values):
                 label = pd.to_datetime(i).strftime('%Y-%m-%d')
-                ax.text(i, v, label, ha='center', color='red', va='bottom', fontsize=8, rotation=45)
+                ax1.text(i, v, label, ha='center', color='red', va='bottom', fontsize=8, rotation=45)
+            for i, v in zip(pks.obs_time.values, pks.obs_val.values):
+                label = pd.to_datetime(i).strftime('%Y-%m-%d')
+                ax2.text(i, v, label, ha='center', color='blue', va='bottom', fontsize=8, rotation=45)
 
             df['obs_event'] = df.time.isin(pks.obs_time.values)
             df['sim_event'] = df.time.isin(pks.sim_time.values)
 
+        fig.tight_layout()
         return (df, fig)
 
-    def hydrograph(self, sim: pd.Series, obs: pd.Series):
-        return self.__hydrograph(sim, obs, events=False)
+    def hydrograph(self, sim: pd.Series, obs: pd.Series, simunits, obsunits):
+        return self.__hydrograph(sim, obs, simunits, obsunits, events=False)
 
-    def hydrograph_with_events(self, sim: pd.Series, obs: pd.Series):
-        return self.__hydrograph(sim, obs, events=True)
+    def hydrograph_with_events(self, sim: pd.Series, obs: pd.Series, simunits, obsunits):
+        return self.__hydrograph(sim, obs, simunits, obsunits, events=True)
 
-    def flow_duration_curve(self, sim: pd.Series, obs: pd.Series):
+    def flow_duration_curve(self, sim: pd.Series, obs: pd.Series, simunits, obsunits):
         """Return flow duration curve from
 
         Returns
@@ -295,35 +320,39 @@ class Results:
         sfdc = self.fdc(sim.values)
         ofdc = self.fdc(obs.values)
 
-        fig = matplotlib.figure.Figure(constrained_layout=True)
-        ax = fig.add_subplot(111)
-        sfdc.plot(x="Exceedence %", y="Discharge (m3/s)", ax=ax, color="red")#, legend='sim')
-        ofdc.plot(x="Exceedence %", y="Discharge (m3/s)", ax=ax, color="blue")#, legend='obs')
-        ax.set_xlabel("Exceedence %")
-        ax.set_ylabel("Discharge (m³/s)")
-        ax.legend(['sim', 'obs'])
+        fig = matplotlib.figure.Figure()
+        ax1 = fig.add_subplot(111)
+        ax2 = ax1.twinx()
+
+        sfdc.plot(x="Exceedence %", y="Discharge (m3/s)", ax=ax1, color="red", label='sim', legend=False)
+        ofdc.plot(x="Exceedence %", y="Discharge (m3/s)", ax=ax2, color="blue", label='obs', legend=False)
+        ax1.set_xlabel("Exceedence %")
+
+        # model sim y axis
+        lab = sim.name if sim.name else "Sim"
+        if simunits:
+            lab = f"{lab} ({simunits})"
+        ax1.set_ylabel(lab, color='red')
+        ax1.tick_params(axis='y', labelcolor='red')
+
+        # obs y axis
+        lab = obs.name if obs.name else "Obs"
+        if obsunits:
+            lab = f"{lab} ({obsunits})"
+        ax2.set_ylabel(lab, color='blue')
+        ax2.tick_params(axis='y', labelcolor='blue')
+
+        # legend
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines1 + lines2, labels1 + labels2)
 
         df = pd.concat([sfdc.set_index("Exceedence %"), ofdc.set_index("Exceedence %")], axis=1).reset_index()
         df.columns = ["Exceedence %", "sim flow", "obs flow"]
 
+        fig.tight_layout()
         return (df, fig)
 
-    def make_sine(self, sim, obs):
-        fig = matplotlib.figure.Figure(constrained_layout=True)
-        ax = fig.add_subplot(111)
-        x = np.linspace(0, 10, 400)
-        ax.plot(x, np.sin(x))
-        ax.set_title("Sine")
-        return (pd.DataFrame(), fig)
-
-    def make_scatter(self, sim, obs):
-        fig = matplotlib.figure.Figure(constrained_layout=True)
-        ax = fig.add_subplot(111)
-        rng = np.random.default_rng(0)
-        x, y = rng.normal(size=200), rng.normal(size=200)
-        ax.scatter(x, y)
-        ax.set_title("Scatter")
-        return (pd.DataFrame(), fig)
 
     def get_tables(self, purp, sim, obs):
 
@@ -370,7 +399,7 @@ class Results:
         
         return(ret)
 
-    def get_graphs(self, purp, sim, obs):
+    def get_graphs(self, purp, sim, obs, simunits, obsunits):
         graphs = self.p2m[purp]['graphs']
         ret = []
         for g in graphs:
@@ -380,7 +409,7 @@ class Results:
                 val = [pd.DataFrame(), matplotlib.figure.Figure(constrained_layout=True)]
             else:
                 try:
-                    val = f(sim, obs)
+                    val = f(sim, obs, simunits, obsunits)
                 except:
                     val = [pd.DataFrame(), matplotlib.figure.Figure(constrained_layout=True)]
             ret.append([g['name'], val[0], val[1]])
@@ -398,11 +427,11 @@ class ResultsWidget(QGroupBox):
         self.init_ui()
         self.setMinimumSize(500, 500)
 
-    def calculate(self, purpose, model, obs):
+    def calculate(self, purpose, model, obs, munits, ounits):
         self.clear_tabs()
 
         # figures
-        for name, df, fig in self.results.get_graphs(purpose, model, obs):
+        for name, df, fig in self.results.get_graphs(purpose, model, obs, munits, ounits):
             i = self.tabs.addTab(FigureCanvas(fig), name)
             self.tabs.tabBar().setTabData(i, df)
 

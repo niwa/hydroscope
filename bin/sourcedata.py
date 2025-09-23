@@ -35,9 +35,11 @@ class SourceData:
         self.data = None  # pd.DataFrame or xr.Dataset
         self.vars = []  # list of strings
         self.v2d = {}  # maps variable to list of dimensions minus time
+        self.v2u = {}  # maps variable to unit (possibly None, for csv will be None)
         self.d2vals = {}  # maps dim to list of possible values
         self.d2type = {}  # maps dim to the type of values
         self.series = None  # the selected variable as a pd.Series
+        self.units = None  # the units of selected variable as a string
         self.var = None  # measuring this var
         self.dims = {}  # measuring var with these dims
 
@@ -63,6 +65,7 @@ class SourceData:
             except Exception as exp:
                 raise ValueError("All defined values must be numeric")
             self.v2d = {v: [] for v in self.vars}
+            self.v2u = {v: None for v in self.vars}
             self.d2vals = {}
         elif fn.suffix.lower() == ".nc":
             # unfortunately topnet doesn't write correct streamq files, time_bnd doesn't have attrs set
@@ -74,6 +77,7 @@ class SourceData:
                 if any(re.search(r"time|date", d, re.IGNORECASE) for d in da.dims)
             }
             self.vars = sorted(self.v2d.keys())
+            self.v2u = {v: ds.data_vars[v].attrs.get("units", None) for v in self.vars}
             self.d2vals = {
                 dim: ds.coords[dim].values.tolist()
                 for dim in sorted(i for d in self.v2d.values() for i in d)
@@ -103,6 +107,8 @@ class SourceData:
     def set_var(self, v):
         self.series = None
         self.dims = {}
+        self.units = None
+
         # when clearing set_var gets called with None, so wipe it out
         if not v:
             self.var = None
@@ -112,7 +118,7 @@ class SourceData:
             raise ValueError(f"Variable {v} does not exist in currently selected file")
 
         self.var = v
-        self.__set_series()
+        self.__set_series(update_units=True)
 
     def set_dims(self, d):
         """d is a dict of dim to value"""
@@ -125,9 +131,12 @@ class SourceData:
         self.dims = d
         self.__set_series()
 
-    def __set_series(self):
+    def __set_series(self, update_units=False):
         if not self.var:
             return
+
+        if update_units:
+            self.set_units(self.v2u.get(self.var, None))
 
         # no dimensions to worry about
         if not self.v2d[self.var]:
@@ -140,6 +149,12 @@ class SourceData:
 
     def get_series(self):
         return self.series
+
+    def set_units(self, u):
+        self.units = u
+
+    def get_units(self):
+        return self.units
 
 
 class SourceDataWidget(QGroupBox):
@@ -154,12 +169,16 @@ class SourceDataWidget(QGroupBox):
         # if we had a previous file, load it
         fname = self.parent.cp["DEFAULT"].get(f"{self.title}_fname")
         if fname and (fname := pathlib.Path(fname)) and fname.exists():
-            self._new_sourcedata_file(fname)
+            self.__set_sourcedata_file(fname)
 
-        # setting the variable currently doesn't work since after setting file the variables are reset
-        # v = self.parent.cp["DEFAULT"].get(f"{self.title}_var")
-        # if v and v in self.sd.get_vars():
-        #    self.sd.set_var(v)
+        # if there is a var saved, lets set it
+        v = self.parent.cp["DEFAULT"].get(f"{self.title}_var")
+        if v and v in self.sd.get_vars() and self.vars_cb.findText(v) != -1:
+            self.vars_cb.setCurrentText(v)
+
+        # units
+        if (u := self.parent.cp["DEFAULT"].get(f"{self.title}_units")):
+            self.units_le.setText(u)
 
     def init_ui(self):
 
@@ -170,15 +189,24 @@ class SourceDataWidget(QGroupBox):
         hbox.addWidget(QLabel("File:"))
         self.fn_le = lab = utils.ClickableLineEdit("Click to select file", char_width=15)
         lab.setMinimumWidth(100)
-        lab.clicked.connect(self.select_sourcedata_file)
+        lab.clicked.connect(self.__act_sourcedata_file)        # user change, so store in config
         hbox.addWidget(lab)
 
         # Variable label and dropdown
         hbox.addWidget(QLabel("Variable:"))
         self.vars_cb = cb = QComboBox()
         cb.setMinimumWidth(100)
-        cb.currentTextChanged.connect(self.set_var)
+        cb.currentTextChanged.connect(self.__set_var)   # programmatically set, so dont store in config
+        cb.activated.connect(self.__act_var)            # when user changes it we store in config
         hbox.addWidget(cb)
+
+        # Units
+        hbox.addWidget(QLabel("Units:"))
+        self.units_le = le = QLineEdit()
+        le.setMaximumWidth(80)
+        le.textChanged.connect(self.__set_units)     # programmatically set, so dont store in config
+        le.textEdited.connect(self.__act_units)     # only when user changes we store
+        hbox.addWidget(le)
 
         # Dimensions button
         self.dims_btn = btn = QPushButton("Dimensions")
@@ -192,7 +220,7 @@ class SourceDataWidget(QGroupBox):
         view_btn.clicked.connect(self.view_series)
         hbox.addWidget(view_btn)
 
-    def select_sourcedata_file(self):
+    def __act_sourcedata_file(self):
         fname, _ = QFileDialog.getOpenFileName(
             self,
             "Select a file",
@@ -204,15 +232,14 @@ class SourceDataWidget(QGroupBox):
         fname = pathlib.Path(fname)
 
         self.parent.cp["DEFAULT"]["lastdir"] = str(fname.parent)
-        self.parent.save_config()
 
         # store fname
         self.parent.cp["DEFAULT"][f"{self.title}_fname"] = str(fname)
+        self.parent.save_config()
 
-        self._new_sourcedata_file(fname)
+        self.__set_sourcedata_file(fname)
 
-    def _new_sourcedata_file(self, fname: pathlib.Path):
-        # update GUI
+    def __set_sourcedata_file(self, fname: pathlib.Path):
         self.fn_le.setText(fname.name)
         self.vars_cb.clear()
         self.dims_btn.setEnabled(fname.suffix.lower() == ".nc")
@@ -253,7 +280,14 @@ class SourceDataWidget(QGroupBox):
                 series.plot(ax=ax)
                 ax.set_title(f"{parent.sd.var}{dstr}")
                 ax.set_xlabel("Time")
-                ax.set_ylabel("Value")
+
+                # if there is a name, use it
+                lab = series.name if series.name else "Value"
+                if (u := parent.sd.get_units()):
+                    lab = f"{lab} ({u})"
+                ax.set_ylabel(lab)
+
+                fig.tight_layout()
 
                 canvas = FigureCanvas(fig)
                 layout.addWidget(canvas)
@@ -265,9 +299,20 @@ class SourceDataWidget(QGroupBox):
         d = PlotDialog(self, s)
         d.exec()
 
-    def set_var(self, v):
-        self.parent.cp["DEFAULT"][f"{self.title}_var"] = v
+    def __set_var(self, v):
         self.sd.set_var(v)
+        self.units_le.setText(self.sd.get_units())
+
+    def __act_var(self, idx):
+        """When user changes var we save it"""
+        self.parent.cp["DEFAULT"][f"{self.title}_var"] = self.vars_cb.itemText(idx)
+        self.__set_var(self.vars_cb.itemText(idx))
+
+    def __set_units(self, u):
+        self.sd.set_units(u)
+
+    def __act_units(self, u):
+        self.parent.cp["DEFAULT"][f"{self.title}_units"] = u
 
     def set_dims(self):
         vname = self.vars_cb.currentText()

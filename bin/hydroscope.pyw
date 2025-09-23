@@ -238,10 +238,12 @@ class Window(QMainWindow):
         """Calculate the given metric if possible"""
         m = self.model.get_series()
         o = self.obs.get_series()
+        mu = self.model.get_units()
+        ou = self.obs.get_units()
         if m is None or o is None:
             QMessageBox.warning(self, "No data", "Need model and obs data defined first")
             return
-        self.rd.calculate(purp, m, o)
+        self.rd.calculate(purp, m, o, mu, ou)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
