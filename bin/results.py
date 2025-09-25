@@ -20,6 +20,8 @@ from PyQt6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
+    QToolButton,
+    QSizePolicy
 )
 
 from PyQt6.QtGui import (
@@ -44,7 +46,10 @@ import matplotlib
 matplotlib.use("QtAgg")
 import matplotlib.pyplot as plt
 import matplotlib.figure
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import (
+    FigureCanvasQTAgg as FigureCanvas,
+    NavigationToolbar2QT as NavigationToolbar
+)
 
 
 
@@ -432,7 +437,24 @@ class ResultsWidget(QGroupBox):
 
         # figures
         for name, df, fig in self.results.get_graphs(purpose, model, obs, munits, ounits):
-            i = self.tabs.addTab(FigureCanvas(fig), name)
+            # need a container to put canvas/plot and toolbar in
+            container = QWidget()
+            layout = QHBoxLayout(container)
+            can = FigureCanvas(fig)
+
+            # narrow vertical toolbar
+            toolbar = NavigationToolbar(can, self)
+            toolbar.setOrientation(Qt.Orientation.Vertical)
+            toolbar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+            toolbar.setMaximumWidth(40)
+            toolbar.setMinimumWidth(40)
+            for action in toolbar.actions():
+                if action.text() in ("Subplots", "Customize"):
+                    toolbar.removeAction(action)
+
+            layout.addWidget(can)
+            layout.addWidget(toolbar)
+            i = self.tabs.addTab(container, name)
             self.tabs.tabBar().setTabData(i, df)
 
         # tables
