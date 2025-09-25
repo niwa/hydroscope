@@ -10,6 +10,8 @@ matplotlib.use("QtAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
+from PyQt6.QtGui import QRegularExpressionValidator
+from PyQt6.QtCore import QRegularExpression
 from PyQt6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
@@ -24,9 +26,6 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QGroupBox,
 )
-
-from PyQt6.QtGui import QRegularExpressionValidator
-from PyQt6.QtCore import QRegularExpression
 
 
 class SourceData:
@@ -177,7 +176,7 @@ class SourceDataWidget(QGroupBox):
             self.vars_cb.setCurrentText(v)
 
         # units
-        if (u := self.parent.cp["DEFAULT"].get(f"{self.title}_units")):
+        if u := self.parent.cp["DEFAULT"].get(f"{self.title}_units"):
             self.units_le.setText(u)
 
     def init_ui(self):
@@ -189,23 +188,25 @@ class SourceDataWidget(QGroupBox):
         hbox.addWidget(QLabel("File:"))
         self.fn_le = lab = utils.ClickableLineEdit("Click to select file", char_width=15)
         lab.setMinimumWidth(100)
-        lab.clicked.connect(self.__act_sourcedata_file)        # user change, so store in config
+        lab.clicked.connect(self.__act_sourcedata_file)  # user change, so store in config
         hbox.addWidget(lab)
 
         # Variable label and dropdown
         hbox.addWidget(QLabel("Variable:"))
         self.vars_cb = cb = QComboBox()
         cb.setMinimumWidth(100)
-        cb.currentTextChanged.connect(self.__set_var)   # programmatically set, so dont store in config
-        cb.activated.connect(self.__act_var)            # when user changes it we store in config
+        cb.currentTextChanged.connect(
+            self.__set_var
+        )  # programmatically set, so dont store in config
+        cb.activated.connect(self.__act_var)  # when user changes it we store in config
         hbox.addWidget(cb)
 
         # Units
         hbox.addWidget(QLabel("Units:"))
         self.units_le = le = QLineEdit()
         le.setMaximumWidth(80)
-        le.textChanged.connect(self.__set_units)     # programmatically set, so dont store in config
-        le.textEdited.connect(self.__act_units)     # only when user changes we store
+        le.textChanged.connect(self.__set_units)  # programmatically set, so dont store in config
+        le.textEdited.connect(self.__act_units)  # only when user changes we store
         hbox.addWidget(le)
 
         # Dimensions button
@@ -283,7 +284,7 @@ class SourceDataWidget(QGroupBox):
 
                 # if there is a name, use it
                 lab = series.name if series.name else "Value"
-                if (u := parent.sd.get_units()):
+                if u := parent.sd.get_units():
                     lab = f"{lab} ({u})"
                 ax.set_ylabel(lab)
 

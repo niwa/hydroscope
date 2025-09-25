@@ -1,56 +1,34 @@
-import re
 import pathlib
 import json
+import numpy as np
+import pandas as pd
+import matplotlib
+from scipy.signal import find_peaks
+from permetrics.regression import RegressionMetric
+from hydrosignatures.baseflow import baseflow_index
+
+matplotlib.use("QtAgg")
+import matplotlib.figure
+from matplotlib.backends.backend_qt5agg import (
+    FigureCanvasQTAgg as FigureCanvas,
+    NavigationToolbar2QT as NavigationToolbar,
+)
+
+from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QLabel,
     QPushButton,
-    QComboBox,
     QFileDialog,
-    QMessageBox,
-    QDialog,
-    QLineEdit,
-    QDialogButtonBox,
-    QGridLayout,
     QGroupBox,
-    QTextEdit,
     QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
-    QToolButton,
-    QSizePolicy
+    QSizePolicy,
 )
-
-from PyQt6.QtGui import (
-    QRegularExpressionValidator,
-    QFont
-)
-from PyQt6.QtCore import (
-    QRegularExpression,
-    Qt
-)
-import utils
-import numpy as np
-import pandas as pd
-import xarray as xr
-from scipy.signal import find_peaks
-
-from permetrics.regression import RegressionMetric
-from hydrosignatures.baseflow import baseflow, baseflow_index
-
-
-import matplotlib
-matplotlib.use("QtAgg")
-import matplotlib.pyplot as plt
-import matplotlib.figure
-from matplotlib.backends.backend_qt5agg import (
-    FigureCanvasQTAgg as FigureCanvas,
-    NavigationToolbar2QT as NavigationToolbar
-)
-
 
 
 class Results:
@@ -100,13 +78,13 @@ class Results:
         return RegressionMetric(obs, sim).root_mean_squared_error()
 
     def peakrmse(self, sim: pd.Series, obs: pd.Series):
-        pt = self.peak_table('', sim, obs)
+        pt = self.peak_table("", sim, obs)
         return self.rmse(pt.sim_val, pt.obs_val)
 
     def __bfi(self, f: np.array):
-        a = float(self.cp.get('bfi_alpha', 0.925))
-        n = int(self.cp.get('bfi_np', 1))
-        return baseflow_index(f, alpha=a, n_passes=n) 
+        a = float(self.cp.get("bfi_alpha", 0.925))
+        n = int(self.cp.get("bfi_np", 1))
+        return baseflow_index(f, alpha=a, n_passes=n)
 
     def sbfi(self, sim: pd.Series, obs: pd.Series):
         return self.__bfi(sim.values)
@@ -115,7 +93,7 @@ class Results:
         return self.__bfi(obs.values)
 
     def __q95q50(self, flow: np.array):
-        denom =  np.percentile(flow, 50)
+        denom = np.percentile(flow, 50)
         return np.percentile(flow, 5) / denom if denom != 0 else np.inf
 
     def sq95q50(self, sim: pd.Series, obs: pd.Series):
@@ -125,11 +103,13 @@ class Results:
         return self.__q95q50(obs.values)
 
     def fdc_segment_bias(self, sim: np.array, obs: np.array, lo, hi):
-        qlo = np.quantile(obs, 1-hi)
-        qhi = np.quantile(obs, 1-lo)
+        qlo = np.quantile(obs, 1 - hi)
+        qhi = np.quantile(obs, 1 - lo)
         mask = (obs >= qlo) & (obs <= qhi)
-        denom =  np.nansum(obs[mask])
-        return 100 * (np.nansum(sim[mask]) - np.nansum(obs[mask])) / denom if denom != 0 else np.inf
+        denom = np.nansum(obs[mask])
+        return (
+            100 * (np.nansum(sim[mask]) - np.nansum(obs[mask])) / denom if denom != 0 else np.inf
+        )
 
     def flv(self, sim: pd.Series, obs: pd.Series):
         obs = obs.values
@@ -144,8 +124,13 @@ class Results:
     def pte(self, sim: pd.Series, obs: pd.Series):
         """Peak timing error which is mean of timing errors in hours"""
 
-        pt = self.peak_table('', sim, obs)
-        return np.mean(np.abs(pt.obs_time.values.astype("datetime64[ns]") - pt.sim_time.astype("datetime64[ns]")) / np.timedelta64(1, "h"))
+        pt = self.peak_table("", sim, obs)
+        return np.mean(
+            np.abs(
+                pt.obs_time.values.astype("datetime64[ns]") - pt.sim_time.astype("datetime64[ns]")
+            )
+            / np.timedelta64(1, "h")
+        )
 
     def fdc(self, flows):
         """Return flow duration curve from
@@ -162,7 +147,9 @@ class Results:
         """
 
         sorted_discharge_values = np.sort(flows)[::-1]
-        exceedence = np.arange(1.0, len(sorted_discharge_values) + 1) / len(sorted_discharge_values)
+        exceedence = np.arange(1.0, len(sorted_discharge_values) + 1) / len(
+            sorted_discharge_values
+        )
 
         return pd.DataFrame(
             {"Exceedence %": exceedence * 100, "Discharge (m3/s)": sorted_discharge_values}
@@ -177,8 +164,8 @@ class Results:
         pd.DataFrame
             obs_time, obs_val, sim_time, sim_val
         """
-        peak_num = int(self.cp.get('peak_num', 4))
-        peak_gap = int(self.cp.get('peak_gap', 7)) * 24 * 60 * 60
+        peak_num = int(self.cp.get("peak_num", 4))
+        peak_gap = int(self.cp.get("peak_gap", 7)) * 24 * 60 * 60
 
         # get the timestep in seconds
         try:
@@ -193,46 +180,47 @@ class Results:
         times = []
         for s in (obs, sim):
             # indices into obs.values
-            peaks, _ = find_peaks(s.values, distance=peak_gap/dt)
+            peaks, _ = find_peaks(s.values, distance=peak_gap / dt)
             # these are the top indices sorted, biggest is last
             top_peaks = peaks[np.argsort(s.values[peaks])[-peak_num:]]
             # return the actual times
             times.append(s.index[top_peaks])
 
         if len(times[0]) == 0 or len(times[1]) == 0:
-            return pd.DataFrame({
-                'obs_time': [],
-                'obs_val': [],
-                'sim_time': [],
-                'sim_val': [],
-            })
+            return pd.DataFrame(
+                {
+                    "obs_time": [],
+                    "obs_val": [],
+                    "sim_time": [],
+                    "sim_val": [],
+                }
+            )
 
         obs_time = times[0]
-        sim_time = [
-            times[1][np.argmin(np.abs(p -  times[1]))]
-            for p in obs_time
-        ]
+        sim_time = [times[1][np.argmin(np.abs(p - times[1]))] for p in obs_time]
 
-        return pd.DataFrame({
-            'obs_time': obs_time,
-            'obs_val': obs[obs_time].values,
-            'sim_time': sim_time,
-            'sim_val': sim[sim_time].values
-        })
+        return pd.DataFrame(
+            {
+                "obs_time": obs_time,
+                "obs_val": obs[obs_time].values,
+                "sim_time": sim_time,
+                "sim_val": sim[sim_time].values,
+            }
+        )
 
     def metric_table(self, purp, sim: pd.Series, obs: pd.Series):
         """Return a dataframe with the metrics and their values."""
-      
+
         # some of the metrics need the same start and end
         start = max(sim.index.min(), obs.index.min())
-        end   = min(sim.index.max(), obs.index.max())
+        end = min(sim.index.max(), obs.index.max())
         sim = sim.loc[start:end]
         obs = obs.loc[start:end]
 
         if start >= end:
-            return pd.DataFrame({'Error': [f"Sim and obs don't overlap"]})
+            return pd.DataFrame({"Error": [f"Sim and obs don't overlap"]})
 
-        mets = self.p2m[purp]['metrics']
+        mets = self.p2m[purp]["metrics"]
         vals = []
         for m in mets:
             try:
@@ -246,17 +234,16 @@ class Results:
                     val = f"{exp}"
             vals.append(val)
 
-        return pd.DataFrame({'Metric': [m['name'] for m in mets], 'Value': vals})
-
+        return pd.DataFrame({"Metric": [m["name"] for m in mets], "Value": vals})
 
     # graphs
     def __hydrograph(self, sim: pd.Series, obs: pd.Series, simunits, obsunits, events=True):
 
-        fig = matplotlib.figure.Figure()#constrained_layout=True)
+        fig = matplotlib.figure.Figure()  # constrained_layout=True)
         ax1 = fig.add_subplot(111)
         ax2 = ax1.twinx()
-        sim.plot(ax=ax1, color='red', label='sim', legend=False)
-        obs.plot(ax=ax2, color='blue', label='obs', legend=False)
+        sim.plot(ax=ax1, color="red", label="sim", legend=False)
+        obs.plot(ax=ax2, color="blue", label="obs", legend=False)
 
         xmin = min(sim.index.min(), obs.index.min())
         xmax = max(sim.index.max(), obs.index.max())
@@ -267,15 +254,15 @@ class Results:
         lab = sim.name if sim.name else "Sim"
         if simunits:
             lab = f"{lab} ({simunits})"
-        ax1.set_ylabel(lab, color='red')
-        ax1.tick_params(axis='y', labelcolor='red')
+        ax1.set_ylabel(lab, color="red")
+        ax1.tick_params(axis="y", labelcolor="red")
 
         # obs y axis
         lab = obs.name if obs.name else "Obs"
         if obsunits:
             lab = f"{lab} ({obsunits})"
-        ax2.set_ylabel(lab, color='blue')
-        ax2.tick_params(axis='y', labelcolor='blue')
+        ax2.set_ylabel(lab, color="blue")
+        ax2.tick_params(axis="y", labelcolor="blue")
 
         # legend
         lines1, labels1 = ax1.get_legend_handles_labels()
@@ -285,24 +272,28 @@ class Results:
         # x ticks rotate
         for label in ax1.get_xticklabels():
             label.set_rotation(45)
-            label.set_horizontalalignment('right')
+            label.set_horizontalalignment("right")
 
         # make a dataframe
-        df = pd.DataFrame({'obs': obs, 'sim': sim}).reset_index()
+        df = pd.DataFrame({"obs": obs, "sim": sim}).reset_index()
 
         if events:
-            pks = self.peak_table('', sim, obs)
-            ax1.scatter(pks.sim_time.values, pks.sim_val.values, color='red', zorder=5)
-            ax2.scatter(pks.obs_time.values, pks.obs_val.values, color='blue', zorder=5)
+            pks = self.peak_table("", sim, obs)
+            ax1.scatter(pks.sim_time.values, pks.sim_val.values, color="red", zorder=5)
+            ax2.scatter(pks.obs_time.values, pks.obs_val.values, color="blue", zorder=5)
             for i, v in zip(pks.sim_time.values, pks.sim_val.values):
-                label = pd.to_datetime(i).strftime('%Y-%m-%d')
-                ax1.text(i, v, label, ha='center', color='red', va='bottom', fontsize=8, rotation=45)
+                label = pd.to_datetime(i).strftime("%Y-%m-%d")
+                ax1.text(
+                    i, v, label, ha="center", color="red", va="bottom", fontsize=8, rotation=45
+                )
             for i, v in zip(pks.obs_time.values, pks.obs_val.values):
-                label = pd.to_datetime(i).strftime('%Y-%m-%d')
-                ax2.text(i, v, label, ha='center', color='blue', va='bottom', fontsize=8, rotation=45)
+                label = pd.to_datetime(i).strftime("%Y-%m-%d")
+                ax2.text(
+                    i, v, label, ha="center", color="blue", va="bottom", fontsize=8, rotation=45
+                )
 
-            df['obs_event'] = df.time.isin(pks.obs_time.values)
-            df['sim_event'] = df.time.isin(pks.sim_time.values)
+            df["obs_event"] = df.time.isin(pks.obs_time.values)
+            df["sim_event"] = df.time.isin(pks.sim_time.values)
 
         fig.tight_layout()
         return (df, fig)
@@ -321,7 +312,7 @@ class Results:
         df: pd.DataFrame
             Dataframe with Exceedance % and Discharge columns
         """
-        
+
         sfdc = self.fdc(sim.values)
         ofdc = self.fdc(obs.values)
 
@@ -329,53 +320,63 @@ class Results:
         ax1 = fig.add_subplot(111)
         ax2 = ax1.twinx()
 
-        sfdc.plot(x="Exceedence %", y="Discharge (m3/s)", ax=ax1, color="red", label='sim', legend=False)
-        ofdc.plot(x="Exceedence %", y="Discharge (m3/s)", ax=ax2, color="blue", label='obs', legend=False)
+        sfdc.plot(
+            x="Exceedence %", y="Discharge (m3/s)", ax=ax1, color="red", label="sim", legend=False
+        )
+        ofdc.plot(
+            x="Exceedence %",
+            y="Discharge (m3/s)",
+            ax=ax2,
+            color="blue",
+            label="obs",
+            legend=False,
+        )
         ax1.set_xlabel("Exceedence %")
 
         # model sim y axis
         lab = sim.name if sim.name else "Sim"
         if simunits:
             lab = f"{lab} ({simunits})"
-        ax1.set_ylabel(lab, color='red')
-        ax1.tick_params(axis='y', labelcolor='red')
+        ax1.set_ylabel(lab, color="red")
+        ax1.tick_params(axis="y", labelcolor="red")
 
         # obs y axis
         lab = obs.name if obs.name else "Obs"
         if obsunits:
             lab = f"{lab} ({obsunits})"
-        ax2.set_ylabel(lab, color='blue')
-        ax2.tick_params(axis='y', labelcolor='blue')
+        ax2.set_ylabel(lab, color="blue")
+        ax2.tick_params(axis="y", labelcolor="blue")
 
         # legend
         lines1, labels1 = ax1.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
         ax1.legend(lines1 + lines2, labels1 + labels2)
 
-        df = pd.concat([sfdc.set_index("Exceedence %"), ofdc.set_index("Exceedence %")], axis=1).reset_index()
+        df = pd.concat(
+            [sfdc.set_index("Exceedence %"), ofdc.set_index("Exceedence %")], axis=1
+        ).reset_index()
         df.columns = ["Exceedence %", "sim flow", "obs flow"]
 
         fig.tight_layout()
         return (df, fig)
 
-
     def get_tables(self, purp, sim, obs):
 
         dfs = []
-        for t in self.p2m[purp]['tables']:
+        for t in self.p2m[purp]["tables"]:
             try:
                 f = getattr(self, f"{t['fun']}")
             except Exception as exp:
-                val = pd.DataFrame({'Error': [f"No {t['fun']} defined: {exp}"]})
+                val = pd.DataFrame({"Error": [f"No {t['fun']} defined: {exp}"]})
             else:
                 try:
                     val = f(purp, sim, obs)
                 except Exception as exp:
-                    val = pd.DataFrame({'Error': [f"{exp}"]})
+                    val = pd.DataFrame({"Error": [f"{exp}"]})
             dfs.append(val)
 
         ret = []
-        for tab, df in zip(self.p2m[purp]['tables'], dfs):
+        for tab, df in zip(self.p2m[purp]["tables"], dfs):
             table = QTableWidget()
             table.setRowCount(df.shape[0])
             table.setColumnCount(df.shape[1])
@@ -392,7 +393,7 @@ class Results:
                 for j in range(df.shape[1]):
                     value = df.iloc[i, j]
                     if isinstance(value, float):
-                        text = f"{value:.4g}"   # 3sf
+                        text = f"{value:.4g}"  # 3sf
                     else:
                         text = str(value)
 
@@ -400,12 +401,12 @@ class Results:
                     item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)  # make non-editable
                     table.setItem(i, j, item)
 
-            ret.append((tab['name'], df, table))
-        
-        return(ret)
+            ret.append((tab["name"], df, table))
+
+        return ret
 
     def get_graphs(self, purp, sim, obs, simunits, obsunits):
-        graphs = self.p2m[purp]['graphs']
+        graphs = self.p2m[purp]["graphs"]
         ret = []
         for g in graphs:
             try:
@@ -417,14 +418,13 @@ class Results:
                     val = f(sim, obs, simunits, obsunits)
                 except:
                     val = [pd.DataFrame(), matplotlib.figure.Figure(constrained_layout=True)]
-            ret.append([g['name'], val[0], val[1]])
+            ret.append([g["name"], val[0], val[1]])
         return ret
-
 
 
 class ResultsWidget(QGroupBox):
 
-    def __init__(self, rd: Results, title='Results', parent=None):
+    def __init__(self, rd: Results, title="Results", parent=None):
         super().__init__(title, parent=parent)
         self.results = rd
         self.title = title
@@ -462,7 +462,6 @@ class ResultsWidget(QGroupBox):
             i = self.tabs.addTab(data, name)
             self.tabs.tabBar().setTabData(i, df)
 
-
         self.dl_btn.setEnabled(True)
 
     def clear_tabs(self):
@@ -489,14 +488,14 @@ class ResultsWidget(QGroupBox):
 
         vbox.addLayout(hbox)
 
-
     def download_current_df(self):
         i = self.tabs.currentIndex()
         df = self.tabs.tabBar().tabData(i)
         if df is None:
             return
 
-        path, _ = QFileDialog.getSaveFileName(self, "Save CSV", f"{self.tabs.tabText(i)}.csv", "CSV Files (*.csv)")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save CSV", f"{self.tabs.tabText(i)}.csv", "CSV Files (*.csv)"
+        )
         if path:
             df.to_csv(path, index=False)
-

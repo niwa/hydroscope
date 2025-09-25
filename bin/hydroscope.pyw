@@ -4,6 +4,7 @@ import os
 import sys
 import pathlib
 import configparser
+import platformdirs
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -11,11 +12,9 @@ from PyQt6.QtWidgets import (
     QDialogButtonBox,
     QMenu,
     QWidget,
-    QVBoxLayout, QHBoxLayout,
+    QVBoxLayout,
     QFormLayout,
     QLineEdit,
-    QLabel,
-    QGroupBox,
     QMessageBox
 )
 from PyQt6.QtGui import (
@@ -23,7 +22,7 @@ from PyQt6.QtGui import (
     QIcon
 )
 from PyQt6.QtCore import QTimer
-import platformdirs
+
 import utils
 import updates
 import sourcedata
@@ -202,13 +201,13 @@ class Window(QMainWindow):
                     p = int(self.peak_gap.text())
                     bn = int(self.bfi_np.text())
                 except Exception as exp:
-                    QMessageBox.critical(self, "Error", "Peak number and width and BFI passes must be integers")
+                    QMessageBox.critical(self, "Error", f"Peak number and width and BFI passes must be integers: {exp}")
                     return False
              
                 try:
                     ba = float(self.bfi_alpha.text())
                 except Exception as exp:
-                    QMessageBox.critical(self, "Error", "BFI alpha must be a float")
+                    QMessageBox.critical(self, "Error", f"BFI alpha must be a float {exp}")
                     return False
              
                 if n < 1 or p < 1:
