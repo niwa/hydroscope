@@ -52,10 +52,15 @@ class SourceData:
         self.fn = fn
         if fn.suffix.lower() == ".csv":
             try:
-                self.data = df = pd.read_csv(fn, index_col=0, parse_dates=[0])
-                pd.to_datetime(df.index, errors="raise")
-            except Exception as exp:
-                raise ValueError(f"Unsupported file format, please read Help menu: {exp}")
+                df = pd.read_csv(fn, index_col=0, parse_dates=[0])
+                df.index = pd.to_datetime(df.index, errors="raise")
+            except Exception as exp1:
+                # lets try and recover by assuming DD/MM/YYYY format
+                try:
+                    df = pd.read_csv(fn, index_col=0, parse_dates=[0])
+                    df.index = pd.to_datetime(df.index, dayfirst=True, errors="raise")
+                except Exception as exp2:
+                    raise ValueError(f"Unsupported file format, please read Help menu.\nOriginal error:\n{exp1}\nFallback error assuming DD/MM/YYYY:\n{exp2}")
             if pd.infer_freq(df.index) is None:
                 raise ValueError(f"First column doesn't have uniform frequency")
             self.vars = df.columns.tolist()
@@ -63,6 +68,7 @@ class SourceData:
                 df.apply(pd.to_numeric, errors="raise")
             except Exception as exp:
                 raise ValueError("All defined values must be numeric")
+            self.data = df
             self.v2d = {v: [] for v in self.vars}
             self.v2u = {v: None for v in self.vars}
             self.d2vals = {}

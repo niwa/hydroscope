@@ -171,7 +171,7 @@ class Results:
         try:
             dt = (obs.index[1] - obs.index[0]).seconds
             sdt = (sim.index[1] - sim.index[0]).seconds
-        except Exception as ecp:
+        except Exception as exp:
             raise ValueError(f"Can't determine peaks, series possibly not long enough: {exp}")
         if dt != sdt:
             raise ValueError("Can only determine peaks when obs and sim have same timestep")
