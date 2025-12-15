@@ -60,7 +60,9 @@ class SourceData:
                     df = pd.read_csv(fn, index_col=0, parse_dates=[0])
                     df.index = pd.to_datetime(df.index, dayfirst=True, errors="raise")
                 except Exception as exp2:
-                    raise ValueError(f"Unsupported file format, please read Help menu.\nOriginal error:\n{exp1}\nFallback error assuming DD/MM/YYYY:\n{exp2}")
+                    raise ValueError(
+                        f"Unsupported file format, please read Help menu.\nOriginal error:\n{exp1}\nFallback error assuming DD/MM/YYYY:\n{exp2}"
+                    )
             if pd.infer_freq(df.index) is None:
                 raise ValueError(f"First column doesn't have uniform frequency")
             self.vars = df.columns.tolist()
