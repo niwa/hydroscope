@@ -183,10 +183,6 @@ class SourceDataWidget(QGroupBox):
         if v and v in self.sd.get_vars() and self.vars_cb.findText(v) != -1:
             self.vars_cb.setCurrentText(v)
 
-        # units
-        if u := self.parent.cp["DEFAULT"].get(f"{self.title}_units"):
-            self.units_le.setText(u)
-
     def init_ui(self):
 
         # Horizontal layout
@@ -208,14 +204,6 @@ class SourceDataWidget(QGroupBox):
         )  # programmatically set, so dont store in config
         cb.activated.connect(self.__act_var)  # when user changes it we store in config
         hbox.addWidget(cb)
-
-        # Units
-        hbox.addWidget(QLabel("Units:"))
-        self.units_le = le = QLineEdit()
-        le.setMaximumWidth(80)
-        le.textChanged.connect(self.__set_units)  # programmatically set, so dont store in config
-        le.textEdited.connect(self.__act_units)  # only when user changes we store
-        hbox.addWidget(le)
 
         # Dimensions button
         self.dims_btn = btn = QPushButton("Dimensions")
@@ -310,7 +298,6 @@ class SourceDataWidget(QGroupBox):
 
     def __set_var(self, v):
         self.sd.set_var(v)
-        self.units_le.setText(self.sd.get_units())
 
     def __act_var(self, idx):
         """When user changes var we save it"""
@@ -319,9 +306,6 @@ class SourceDataWidget(QGroupBox):
 
     def __set_units(self, u):
         self.sd.set_units(u)
-
-    def __act_units(self, u):
-        self.parent.cp["DEFAULT"][f"{self.title}_units"] = u
 
     def set_dims(self):
         vname = self.vars_cb.currentText()
