@@ -15,7 +15,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QFormLayout,
     QLineEdit,
-    QMessageBox
+    QMessageBox,
+    QCheckBox
 )
 from PyQt6.QtGui import (
     QAction,
@@ -183,6 +184,13 @@ class Window(QMainWindow):
                 layout.addRow("BFI alpha:", bfi)
                 layout.addRow("BFI passes:", np)
 
+                self.aggregation = ag = QCheckBox()
+                val = cp.getboolean("aggregation", fallback=False)
+                ag.setChecked(val)
+                ag.setToolTip("Allow time aggregation for model or obs data")
+        
+                layout.addRow("Aggregation:", ag)
+
                 layout.addWidget(btns)
                 self.setLayout(layout)
 
@@ -226,6 +234,7 @@ class Window(QMainWindow):
                 self.parent.cp["DEFAULT"]["peak_gap"] = str(p)
                 self.parent.cp["DEFAULT"]["bfi_alpha"] = str(ba)
                 self.parent.cp["DEFAULT"]["bfi_np"] = str(bn)
+                self.parent.cp["DEFAULT"]["aggregation"] = str(self.aggregation.isChecked())
                 self.parent.save_config()
 
                 return super().accept()
@@ -242,7 +251,7 @@ class Window(QMainWindow):
         if m is None or o is None:
             QMessageBox.warning(self, "No data", "Need model and obs data defined first")
             return
-        self.rd.calculate(purp, m, o, mu, ou)
+        self.rd.calculate(purp, m, o, mu, ou, allowag=self.cp["DEFAULT"].getboolean("aggregation", fallback=False))
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

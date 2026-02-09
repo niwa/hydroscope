@@ -28,6 +28,8 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem,
     QHeaderView,
     QSizePolicy,
+    QMessageBox,
+    QInputDialog,
 )
 
 
@@ -424,17 +426,68 @@ class Results:
 
 class ResultsWidget(QGroupBox):
 
-    def __init__(self, rd: Results, allowag=False, title="Results", parent=None):
+    def __init__(self, rd: Results, title="Results", parent=None):
         super().__init__(title, parent=parent)
         self.results = rd
-        self.allowag = allowag
         self.title = title
         self.parent = parent
         self.init_ui()
         self.setMinimumSize(500, 500)
 
-    def calculate(self, purpose, model, obs, munits, ounits):
+    def __get_ts(self, idx):
+        """Return the timestep in seconds for an index in a robust way"""
+        diffs = idx.to_series().diff().dropna().dt.total_seconds()
+        if len(diffs):
+            return diffs.median()
+        return None
+
+    def calculate(self, purpose, model, obs, munits, ounits, allowag=False):
         self.clear_tabs()
+
+        if allowag:
+            m_ts = self.__get_ts(model.index)
+            o_ts = self.__get_ts(obs.index)
+            if m_ts is None:
+                QMessageBox.warning(self, "Timestep error", "Cannot work out timestep for model")
+                return
+            if o_ts is None:
+                QMessageBox.warning(self, "Timestep error", "Cannot work out timestep for obs")
+                return
+
+            # only aggregate if enough difference in timesteps
+            if abs(m_ts - o_ts) > 1:
+
+                # get the aggregation method
+                names = [model.name.lower(), obs.name.lower()]
+                default = (
+                    "sum" if any([("rain" in x or "precip" in x) for x in names]) else "mean"
+                )
+                methods = ["mean", "sum", "min", "max"]
+                meth, ok = QInputDialog.getItem(
+                    self,
+                    "Select aggregation",
+                    "You requested aggregation, choose method:",
+                    methods,
+                    current=methods.index(default),
+                    editable=False,
+                )
+                if not ok:
+                    meth = default
+
+                if m_ts < o_ts:
+                    model = getattr(model.resample(f"{o_ts}s"), meth)()
+                elif o_ts < m_ts:
+                    obs = getattr(obs.resample(f"{m_ts}s"), meth)()
+
+        # possibly not enough data left if we did aggregation
+        if len(model) < 3:
+            QMessageBox.warning(
+                self, "Data error", "Not enough model data to calculate statistics"
+            )
+            return
+        if len(obs) < 3:
+            QMessageBox.warning(self, "Data error", "Not enough obs data to calculate statistics")
+            return
 
         # figures
         for name, df, fig in self.results.get_graphs(purpose, model, obs, munits, ounits):
