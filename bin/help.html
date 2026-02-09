@@ -27,16 +27,27 @@ in a dropdown box, so you can just select them.  If there are a lot of values,
 then you are going to have to type one in, so you will have to know your data
 before using this tool.
 
+<h3>Time range</h3>
+
+You can optionally restrict the time range of a model or observational variable
+by clicking the Time Range button and modifying the start and end times.
+
 <h3>View</h3>
 
-The View button can only be used after selecting your File, Variable, and possibly Dimensions.
-The presented graphics are simplistic, this is not a plotting program, and the View
+The View button shows a summary of your selected NetCDF or csv file.
+
+<h3>Plot</h3>
+
+The Plot button can only be used after selecting your File, Variable, and possibly Dimensions.
+The presented graphics are simplistic, this is not a plotting program, and the
+plot
 button is just for you to confirm that you have selected your correct Variable/Dimensions.
 
 <h2>Purpose</h2>
 
-Here you can select the purpose of your model, which will then in turn determin the metrics that
-will be calculated.  Pushing the Calculate button will generate plots and metrics.
+Here you can select the purpose of your model, which will then in turn
+determine the metrics that will be calculated.  Pushing the Calculate button
+will generate plots and metrics.
 
 <h2>Results</h2>
 
@@ -46,13 +57,17 @@ per metric that makes sense for this purpose.
 
 <h2>Settings</h2>
 
-The File -> Settings menu allows you set parameters that some of the metrics need.  
+The File -> Settings menu allows you set parameters that some of the metrics
+need and whether time aggregation is allowed.
 
 <ul>
 	<li>Peaks: For high flow modelling you are interested in the peak flows. This parameter determines how many peaks will be identified in your model and obersation hydrographs.
 	<li>Peak gap: The minimum number of days between peak flow events.
 	<li>BFI alpha: The alpha parameter in the Lyne and Hollick baseflow index filter for low flow modeling.
 	<li>BFI passes: The number of passes for in the Lyne and Hollick baseflow index filter for low flow modeling.
+	<li>Aggregation: If selected then model and observational data do not have
+        to have the same timestep, the finer timescale will be aggregated to
+        the coarser.
 </ul>
 
 
