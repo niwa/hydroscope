@@ -411,12 +411,12 @@ class Results:
         for g in graphs:
             try:
                 f = getattr(self, f"{g['fun']}")
-            except Exception as exp:
+            except Exception:
                 val = [pd.DataFrame(), matplotlib.figure.Figure(constrained_layout=True)]
             else:
                 try:
                     val = f(sim, obs, simunits, obsunits)
-                except:
+                except Exception:
                     val = [pd.DataFrame(), matplotlib.figure.Figure(constrained_layout=True)]
             ret.append([g["name"], val[0], val[1]])
         return ret
@@ -424,9 +424,10 @@ class Results:
 
 class ResultsWidget(QGroupBox):
 
-    def __init__(self, rd: Results, title="Results", parent=None):
+    def __init__(self, rd: Results, allowag=False, title="Results", parent=None):
         super().__init__(title, parent=parent)
         self.results = rd
+        self.allowag = allowag
         self.title = title
         self.parent = parent
         self.init_ui()

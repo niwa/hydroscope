@@ -10,7 +10,7 @@ matplotlib.use("QtAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
-from PyQt6.QtGui import QRegularExpressionValidator
+from PyQt6.QtGui import QRegularExpressionValidator, QFontDatabase
 from PyQt6.QtCore import QRegularExpression, QDateTime
 from PyQt6.QtWidgets import (
     QVBoxLayout,
@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QDateTimeEdit,
+    QPlainTextEdit,
 )
 
 
@@ -271,8 +272,13 @@ class SourceDataWidget(QGroupBox):
 
         # View button
         view_btn = QPushButton("View")
-        view_btn.clicked.connect(self.view_series)
+        view_btn.clicked.connect(self.view_data)
         hbox.addWidget(view_btn)
+
+        # Plot button
+        plot_btn = QPushButton("Plot")
+        plot_btn.clicked.connect(self.plot_series)
+        hbox.addWidget(plot_btn)
 
     def __act_sourcedata_file(self):
         fname, _ = QFileDialog.getOpenFileName(
@@ -308,7 +314,41 @@ class SourceDataWidget(QGroupBox):
             self.dims_btn.setEnabled(False)
             QMessageBox.critical(self, "Error", f"Could not parse {fname}:\n{e}")
 
-    def view_series(self):
+    def view_data(self):
+        d = self.sd.data
+        if d is None:
+            QMessageBox.warning(self, "No file", "Data file must be loaded")
+            return
+
+        class ViewDialog(QDialog):
+            def __init__(self, parent, df):
+                super().__init__(parent)
+                self.setWindowTitle("Data summary")
+                self.resize(700, 600)
+
+                layout = QVBoxLayout(self)
+
+                text = QPlainTextEdit()
+                text.setReadOnly(True)
+                text.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+
+                if isinstance(df, (xr.DataArray, xr.Dataset)):
+                    summary = repr(df)
+                else:
+                    summary = df.drop(columns=["time"]).to_string(max_rows=20, max_cols=10)
+                text.setPlainText(summary)
+                font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+                text.setFont(font)
+
+                layout.addWidget(text)
+                b = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+                b.accepted.connect(self.accept)
+                layout.addWidget(b)
+
+        dlg = ViewDialog(self, d)
+        dlg.exec()
+
+    def plot_series(self):
         s = self.sd.get_series()
         if s is None:
             QMessageBox.warning(self, "No variable", "File/variable/dimension must be all set")
