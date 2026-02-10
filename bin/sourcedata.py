@@ -146,12 +146,15 @@ class SourceData:
     def set_dims(self, d2v):
         """d2v is a dict of dim to value"""
 
+        print("dSetting the series to none")
         self.series = None
         if not d2v:
+            print("And there are no d2v so leaving none")
             self.dims = {}
             return
 
         if not all([d in self.d2vals and v in self.d2vals[d] for d, v in d2v.items()]):
+            print("dblah")
             return
 
         self.dims = d2v
@@ -186,7 +189,11 @@ class SourceData:
         # no dimensions, probably csv
         if not self.v2d[self.var]:
             self.series = self.data[self.var]
-        elif self.dims and all(d in self.dims for d in self.v2d[self.var]):
+        elif (
+            self.dims
+            and all(d in self.dims for d in self.v2d[self.var])
+            and all(d in self.v2d[self.var] for d in self.dims)
+        ):
             self.series = self.data[self.var].sel(self.dims).to_series()
         else:
             return
@@ -228,13 +235,21 @@ class SourceDataWidget(QGroupBox):
         # if dims set, inform sd
         d = self.parent.cp["DEFAULT"].get(f"{self.title}_dims")
         if d:
-            self.sd.set_dims(json.loads(d))
+            # only set the dims if valid
+            d2v = json.loads(d)
+            if all([d in self.sd.d2vals and v in self.sd.d2vals[d] for d, v in d2v.items()]):
+                self.sd.set_dims(d2v)
 
         # if timerange set, inform sd
         rg = self.parent.cp["DEFAULT"].get(f"{self.title}_timerange")
         if rg:
             start, end = [pd.Timestamp(s) for s in json.loads(rg)]
-            self.sd.set_timerange([start, end])
+            # only set the range if valid, otherwise series is set to None
+            if (
+                self.sd.data is not None
+                and self.sd.data["time"].min() <= start < end <= self.sd.data["time"].max()
+            ):
+                self.sd.set_timerange([start, end])
 
     def init_ui(self):
 

@@ -30,6 +30,9 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QMessageBox,
     QInputDialog,
+    QComboBox,
+    QLabel,
+    QStackedWidget,
 )
 
 
@@ -220,7 +223,7 @@ class Results:
         obs = obs.loc[start:end]
 
         if start >= end:
-            return pd.DataFrame({"Error": [f"Sim and obs don't overlap"]})
+            return pd.DataFrame({"Error": ["Not enough overlapping data"]})
 
         mets = self.p2m[purp]["metrics"]
         vals = []
@@ -240,16 +243,19 @@ class Results:
 
     # graphs
     def __hydrograph(self, sim: pd.Series, obs: pd.Series, simunits, obsunits, events=True):
-
         fig = matplotlib.figure.Figure()  # constrained_layout=True)
         ax1 = fig.add_subplot(111)
         ax2 = ax1.twinx()
-        sim.plot(ax=ax1, color="red", label="sim", legend=False)
-        obs.plot(ax=ax2, color="blue", label="obs", legend=False)
 
+        plot = lambda s, ax, **k: (
+            ax.plot(s.index, s.values, marker="o", **k) if len(s) <= 1 else s.plot(ax=ax, **k)
+        )
+        plot(sim, ax1, color="red", legend=False)
+        plot(obs, ax2, color="blue", legend=False)
         xmin = min(sim.index.min(), obs.index.min())
         xmax = max(sim.index.max(), obs.index.max())
-        ax1.set_xlim(xmin, xmax)
+        if xmax > xmin:
+            ax1.set_xlim(xmin, xmax)
         ax1.set_xlabel("Time")
 
         # model sim y axis
@@ -435,7 +441,7 @@ class ResultsWidget(QGroupBox):
         self.setMinimumSize(500, 500)
 
     def __get_ts(self, idx):
-        """Return the timestep in seconds for an index in a robust way"""
+        """Return the timestep in seconds for an index without using infer"""
         diffs = idx.to_series().diff().dropna().dt.total_seconds()
         if len(diffs):
             return diffs.median()
@@ -489,6 +495,49 @@ class ResultsWidget(QGroupBox):
             QMessageBox.warning(self, "Data error", "Not enough obs data to calculate statistics")
             return
 
+        # scales is {"original", None, "daily": "D", "monthly": "ME" etc}
+        scales = self.__get_scales_for_series(self.__get_ts(model.index))
+
+        # build the figure data
+        numoffigs = len(self.results.p2m[purpose]["graphs"])
+        names = [{} for _ in range(numoffigs)]
+        dfs = [{} for _ in range(numoffigs)]
+        figs = [{} for _ in range(numoffigs)]
+        for label, agg in scales.items():
+            m = model if agg is None else model.resample(f"{agg}").mean()
+            o = obs if agg is None else obs.resample(f"{agg}").mean()
+            for i, (name, df, fig) in enumerate(
+                self.results.get_graphs(purpose, m, o, munits, ounits)
+            ):
+                names[i][label] = name
+                dfs[i][label] = df
+                figs[i][label] = fig
+
+        for name, df, fig in zip(names, dfs, figs):
+            wid = TimescaleFigureTab(name, df, fig)
+            i = self.tabs.addTab(wid, next(iter(name.values())))
+            self.tabs.tabBar().setTabData(i, df)
+
+        # build table data
+        numoftables = len(self.results.p2m[purpose]["tables"])
+        # a list of tables, each element is a dict of timescale to results
+        names = [{} for _ in range(numoftables)]
+        dfs = [{} for _ in range(numoftables)]
+        datas = [{} for _ in range(numoftables)]
+        for label, agg in scales.items():
+            m = model if agg is None else model.resample(f"{agg}").mean()
+            o = obs if agg is None else obs.resample(f"{agg}").mean()
+            for i, ndd in enumerate(self.results.get_tables(purpose, m, o)):
+                names[i][label] = ndd[0]
+                dfs[i][label] = ndd[1]
+                datas[i][label] = ndd[2]
+
+        for name, df, data in zip(names, dfs, datas):
+            wid = TimescaleTableTab(name, df, data)
+            i = self.tabs.addTab(wid, next(iter(name.values())))
+            self.tabs.tabBar().setTabData(i, df)
+
+        """
         # figures
         for name, df, fig in self.results.get_graphs(purpose, model, obs, munits, ounits):
             # need a container to put canvas/plot and toolbar in
@@ -510,13 +559,29 @@ class ResultsWidget(QGroupBox):
             layout.addWidget(toolbar)
             i = self.tabs.addTab(container, name)
             self.tabs.tabBar().setTabData(i, df)
-
-        # tables
+        """
+        """
         for name, df, data in self.results.get_tables(purpose, model, obs):
             i = self.tabs.addTab(data, name)
             self.tabs.tabBar().setTabData(i, df)
 
+        """
+
         self.dl_btn.setEnabled(True)
+
+    def __get_scales_for_series(self, ts):
+        SCALE_ORDER = [
+            ("daily", "D", 86400),
+            ("monthly", "ME", 86400 * 28),
+            ("seasonal", "QE", 86400 * 90),
+            ("yearly", "YE", 86400 * 365),
+        ]
+        scales = {"original": None}
+        if ts is not None:
+            for label, freq, secs in SCALE_ORDER:
+                if secs > ts:
+                    scales[label] = freq
+        return scales
 
     def clear_tabs(self):
         while self.tabs.count() > 0:
@@ -548,8 +613,97 @@ class ResultsWidget(QGroupBox):
         if df is None:
             return
 
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Save CSV", f"{self.tabs.tabText(i)}.csv", "CSV Files (*.csv)"
-        )
+        tab_text = self.tabs.tabText(i)
+        fname = f"{tab_text}.csv"
+
+        if isinstance(df, dict):
+            widget = self.tabs.widget(i)
+            ts = widget.combo.currentText() if hasattr(widget, "combo") else None
+            fname = f"{tab_text}_{ts}.csv" if ts in df else f"{tab_text}.csv"
+            df = df.get(ts, next(iter(df.values())))
+
+        path, _ = QFileDialog.getSaveFileName(self, "Save CSV", fname, "CSV Files (*.csv)")
         if path:
             df.to_csv(path, index=False)
+
+
+class TimescaleTableTab(QWidget):
+    def __init__(self, names_dict, dfs_dict, datas_dict, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+
+        # combobox for each timescale
+        hbox = QHBoxLayout()
+        self.combo = QComboBox()
+        scales = list(names_dict.keys())
+        self.combo.addItems(scales)
+        hbox.addStretch()
+        hbox.addWidget(self.combo)
+        layout.addLayout(hbox)
+
+        # stack the table widgets (one per timescale), only show one
+        self.tables = {}
+        for scale, widget in datas_dict.items():
+            layout.addWidget(widget)
+            widget.setVisible(False)
+            self.tables[scale] = widget
+
+        # Show the first scale by default
+        first_scale = scales[0]
+        self.tables[first_scale].setVisible(True)
+
+        # switch visible table on combo change
+        self.combo.currentTextChanged.connect(self.on_scale_changed)
+
+        self.setLayout(layout)
+
+    def on_scale_changed(self, scale):
+        for s, widget in self.tables.items():
+            widget.setVisible(s == scale)
+
+
+class TimescaleFigureTab(QWidget):
+    def __init__(self, names: dict, dfs: dict, figs: dict, parent=None):
+        super().__init__(parent)
+
+        self.names = names
+        self.dfs = dfs
+        self.figs = figs
+
+        main_layout = QVBoxLayout(self)
+
+        hbox = QHBoxLayout()
+        self.combo = QComboBox()
+        scales = list(names.keys())
+        self.combo.addItems(scales)
+        hbox.addStretch()
+        hbox.addWidget(self.combo)
+        main_layout.addLayout(hbox)
+
+        # --- stacked widget for figures
+        self.stack = QStackedWidget()
+        main_layout.addWidget(self.stack)
+
+        # create each figure page
+        for ts, fig in figs.items():
+            container = QWidget()
+            layout = QHBoxLayout(container)
+
+            canvas = FigureCanvas(fig)
+
+            toolbar = NavigationToolbar(canvas, self)
+            toolbar.setOrientation(Qt.Orientation.Vertical)
+            toolbar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+            toolbar.setMaximumWidth(40)
+            toolbar.setMinimumWidth(40)
+
+            for action in toolbar.actions():
+                if action.text() in ("Subplots", "Customize"):
+                    toolbar.removeAction(action)
+
+            layout.addWidget(canvas)
+            layout.addWidget(toolbar)
+
+            self.stack.addWidget(container)
+
+        self.combo.currentIndexChanged.connect(self.stack.setCurrentIndex)
