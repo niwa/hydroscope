@@ -14,6 +14,16 @@ other columns or variables.
 After loading files you must select the variable you are interested in.  The variables
 founds are in the "Variable:" dropdown box.
 
+<h3>Aggregation</h3>
+
+If the model and observation data are at different timescales then aggregation
+can be performed (if you are have selected Aggregation in the Settings) to
+enable better statistics calculation.  Moreover all the figures and tables
+produced are produced at coarser timescales, eg if your data is daily, you will
+also get monthly, seasonal, and yearly plots.  This dropdown box allows you to
+set what resampling method to use.  Likely you want 'mean', except for
+rain/precip where you probably want 'sum'.
+
 <h3>Dimensions</h3>
 
 For a NetCDF file variables can have more than just a time dimension.  You must
@@ -65,6 +75,7 @@ need and whether time aggregation is allowed.
 	<li>Peak gap: The minimum number of days between peak flow events.
 	<li>BFI alpha: The alpha parameter in the Lyne and Hollick baseflow index filter for low flow modeling.
 	<li>BFI passes: The number of passes for in the Lyne and Hollick baseflow index filter for low flow modeling.
+    <li>Last month of year: This is to define seasonal and annual aggregation.
 	<li>Aggregation: If selected then model and observational data do not have
         to have the same timestep, the finer timescale will be aggregated to
         the coarser.

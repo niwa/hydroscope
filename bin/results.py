@@ -31,7 +31,6 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QInputDialog,
     QComboBox,
-    QLabel,
     QStackedWidget,
 )
 
@@ -247,9 +246,9 @@ class Results:
         ax1 = fig.add_subplot(111)
         ax2 = ax1.twinx()
 
-        plot = lambda s, ax, **k: (
+        def plot(s, ax, **k):
             ax.plot(s.index, s.values, marker="o", **k) if len(s) <= 1 else s.plot(ax=ax, **k)
-        )
+
         plot(sim, ax1, color="red", legend=False)
         plot(obs, ax2, color="blue", legend=False)
         xmin = min(sim.index.min(), obs.index.min())
@@ -447,10 +446,10 @@ class ResultsWidget(QGroupBox):
             return diffs.median()
         return None
 
-    def calculate(self, purpose, model, obs, munits, ounits, allowag=False):
+    def calculate(self, purpose, model, obs, munits, ounits, magg, oagg):
         self.clear_tabs()
 
-        if allowag:
+        if self.results.cp.getboolean("aggregation", fallback=False):
             m_ts = self.__get_ts(model.index)
             o_ts = self.__get_ts(obs.index)
             if m_ts is None:
@@ -463,27 +462,11 @@ class ResultsWidget(QGroupBox):
             # only aggregate if enough difference in timesteps
             if abs(m_ts - o_ts) > 1:
 
-                # get the aggregation method
-                names = [model.name.lower(), obs.name.lower()]
-                default = (
-                    "sum" if any([("rain" in x or "precip" in x) for x in names]) else "mean"
-                )
-                methods = ["mean", "sum", "min", "max"]
-                meth, ok = QInputDialog.getItem(
-                    self,
-                    "Select aggregation",
-                    "You requested aggregation, choose method:",
-                    methods,
-                    current=methods.index(default),
-                    editable=False,
-                )
-                if not ok:
-                    meth = default
-
                 if m_ts < o_ts:
-                    model = getattr(model.resample(f"{o_ts}s"), meth)()
+                    # FIXME, infer might break
+                    model = getattr(model.resample(pd.infer_freq(obs.index)), magg)()
                 elif o_ts < m_ts:
-                    obs = getattr(obs.resample(f"{m_ts}s"), meth)()
+                    obs = getattr(obs.resample(pd.infer_freq(model.index)), oagg)()
 
         # possibly not enough data left if we did aggregation
         if len(model) < 3:
@@ -504,8 +487,8 @@ class ResultsWidget(QGroupBox):
         dfs = [{} for _ in range(numoffigs)]
         figs = [{} for _ in range(numoffigs)]
         for label, agg in scales.items():
-            m = model if agg is None else model.resample(f"{agg}").mean()
-            o = obs if agg is None else obs.resample(f"{agg}").mean()
+            m = model if agg is None else getattr(model.resample(f"{agg}"), magg)()
+            o = obs if agg is None else getattr(obs.resample(f"{agg}"), oagg)()
             for i, (name, df, fig) in enumerate(
                 self.results.get_graphs(purpose, m, o, munits, ounits)
             ):
@@ -525,8 +508,8 @@ class ResultsWidget(QGroupBox):
         dfs = [{} for _ in range(numoftables)]
         datas = [{} for _ in range(numoftables)]
         for label, agg in scales.items():
-            m = model if agg is None else model.resample(f"{agg}").mean()
-            o = obs if agg is None else obs.resample(f"{agg}").mean()
+            m = model if agg is None else getattr(model.resample(f"{agg}"), magg)()
+            o = obs if agg is None else getattr(obs.resample(f"{agg}"), oagg)()
             for i, ndd in enumerate(self.results.get_tables(purpose, m, o)):
                 names[i][label] = ndd[0]
                 dfs[i][label] = ndd[1]
@@ -570,11 +553,12 @@ class ResultsWidget(QGroupBox):
         self.dl_btn.setEnabled(True)
 
     def __get_scales_for_series(self, ts):
+        ye = self.results.cp.get("lastmonthofyear", "Dec").upper()
         SCALE_ORDER = [
             ("daily", "D", 86400),
             ("monthly", "ME", 86400 * 28),
-            ("seasonal", "QE", 86400 * 90),
-            ("yearly", "YE", 86400 * 365),
+            ("seasonal", f"QE-{ye}", 86400 * 90),
+            ("yearly", f"YE-{ye}", 86400 * 365),
         ]
         scales = {"original": None}
         if ts is not None:

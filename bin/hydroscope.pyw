@@ -16,7 +16,8 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QLineEdit,
     QMessageBox,
-    QCheckBox
+    QCheckBox,
+    QComboBox
 )
 from PyQt6.QtGui import (
     QAction,
@@ -184,6 +185,13 @@ class Window(QMainWindow):
                 layout.addRow("BFI alpha:", bfi)
                 layout.addRow("BFI passes:", np)
 
+                self.ye = ye = QComboBox()
+                ye.addItems(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'])
+                ye.setToolTip("Last month of the year for defining seasonal and annual aggregation")
+                if val := cp.get("lastmonthofyear", "Dec"):
+                    ye.setCurrentText(val)
+                layout.addRow("Last month of year:", ye)
+
                 self.aggregation = ag = QCheckBox()
                 val = cp.getboolean("aggregation", fallback=False)
                 ag.setChecked(val)
@@ -234,6 +242,7 @@ class Window(QMainWindow):
                 self.parent.cp["DEFAULT"]["peak_gap"] = str(p)
                 self.parent.cp["DEFAULT"]["bfi_alpha"] = str(ba)
                 self.parent.cp["DEFAULT"]["bfi_np"] = str(bn)
+                self.parent.cp["DEFAULT"]["lastmonthofyear"] = self.ye.currentText()
                 self.parent.cp["DEFAULT"]["aggregation"] = str(self.aggregation.isChecked())
                 self.parent.save_config()
 
@@ -248,10 +257,12 @@ class Window(QMainWindow):
         o = self.obs.get_series()
         mu = self.model.get_units()
         ou = self.obs.get_units()
+        ma = self.model.get_agg()
+        oa = self.obs.get_agg()
         if m is None or o is None:
             QMessageBox.warning(self, "No data", "Need model and obs data defined first")
             return
-        self.rd.calculate(purp, m, o, mu, ou, allowag=self.cp["DEFAULT"].getboolean("aggregation", fallback=False))
+        self.rd.calculate(purp, m, o, mu, ou, ma, oa)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

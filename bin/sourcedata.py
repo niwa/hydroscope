@@ -34,22 +34,26 @@ class SourceData:
     def __init__(self):
         self.fn = None
         self.data = None  # pd.DataFrame or xr.Dataset
-        self.vars = []  # list of strings
-        self.v2d = {}  # maps variable to list of dimensions minus time
-        self.v2u = {}  # maps variable to unit (possibly None, for csv will be None)
-        self.d2vals = {}  # maps dim to list of possible values
-        self.d2type = {}  # maps dim to the type of values
+        self.vars = []  # list of strings of variable names in self.data
+        self.v2d = {}  # maps variable to list of dimensions minus time in self.data
+        self.v2u = {}  # maps variable to unit (possibly None, for csv will be None) in self.data
+        self.d2vals = {}  # maps dim to list of possible values in self.data
+        self.d2type = {}  # maps dim to the type of values in self.data
+
+        # these are for selected variable
         self.series = None  # the selected variable as a pd.Series
         self.units = None  # the units of selected variable as a string
         self.var = None  # measuring this var
-        self.timerange = [None, None]  # possibly restrict time range to this for this var
+        self.agg = "mean"  # aggregation method as a string (mean, sum, max, min)
         self.dims = {}  # measuring var with these dims
+        self.timerange = [None, None]  # possibly restrict time range to this for this var
 
     def read_fn(self, fn):
 
         self.series = None
         self.units = None
         self.var = None
+        self.agg = "mean"
         self.dims = {}
         self.timerange = [None, None]
 
@@ -125,8 +129,8 @@ class SourceData:
 
     def set_var(self, v):
         self.series = None
-        self.dims = {}
         self.units = None
+        self.dims = {}
         self.timerange = [None, None]
 
         # when clearing set_var gets called with None, so wipe it out
@@ -146,15 +150,12 @@ class SourceData:
     def set_dims(self, d2v):
         """d2v is a dict of dim to value"""
 
-        print("dSetting the series to none")
         self.series = None
         if not d2v:
-            print("And there are no d2v so leaving none")
             self.dims = {}
             return
 
         if not all([d in self.d2vals and v in self.d2vals[d] for d, v in d2v.items()]):
-            print("dblah")
             return
 
         self.dims = d2v
@@ -212,6 +213,13 @@ class SourceData:
     def get_units(self):
         return self.units
 
+    def set_agg(self, a):
+        if a in ["mean", "sum", "min", "max"]:
+            self.agg = a
+
+    def get_agg(self):
+        return self.agg
+
 
 class SourceDataWidget(QGroupBox):
 
@@ -231,6 +239,13 @@ class SourceDataWidget(QGroupBox):
         v = self.parent.cp["DEFAULT"].get(f"{self.title}_var")
         if v and v in self.sd.get_vars() and self.vars_cb.findText(v) != -1:
             self.vars_cb.setCurrentText(v)
+            self.__set_var(v)
+
+        # if agg set, inform sd
+        a = self.parent.cp["DEFAULT"].get(f"{self.title}_agg")
+        if a and a in ["mean", "sum", "max", "min"]:
+            self.agg_cb.setCurrentText(a)
+            self.__set_agg(a)
 
         # if dims set, inform sd
         d = self.parent.cp["DEFAULT"].get(f"{self.title}_dims")
@@ -267,14 +282,20 @@ class SourceDataWidget(QGroupBox):
         hbox.addWidget(QLabel("Variable:"))
         self.vars_cb = cb = QComboBox()
         cb.setMinimumWidth(100)
-        cb.currentTextChanged.connect(
-            self.__set_var
-        )  # programmatically set, so dont store in config
+        cb.currentTextChanged.connect(self.__set_var)  # programmatically set, dont store in cp
         cb.activated.connect(self.__act_var)  # when user changes it we store in config
         hbox.addWidget(cb)
 
+        # Aggregation label and dropdown
+        hbox.addWidget(QLabel("Agg:"))
+        self.agg_cb = cb = QComboBox()
+        cb.addItems(["mean", "sum", "min", "max"])
+        cb.setToolTip("How to aggregate this variable")
+        cb.activated.connect(self.__act_agg)  # store in config
+        hbox.addWidget(cb)
+
         # Dimensions button
-        self.dims_btn = btn = QPushButton("Dimensions")
+        self.dims_btn = btn = QPushButton("Dims")
         self.dims_btn.clicked.connect(self.__act_dims)  # store in config
         hbox.addWidget(btn)
 
@@ -310,8 +331,14 @@ class SourceDataWidget(QGroupBox):
 
         # store fname
         self.parent.cp["DEFAULT"][f"{self.title}_fname"] = str(fname)
-        self.parent.save_config()
 
+        # stored var, dims and time range don't make sense now
+        self.parent.cp["DEFAULT"].pop(f"{self.title}_var", None)
+        self.parent.cp["DEFAULT"].pop(f"{self.title}_dims", None)
+        self.parent.cp["DEFAULT"].pop(f"{self.title}_timerange", None)
+        self.parent.cp["DEFAULT"].pop(f"{self.title}_agg", None)
+
+        self.parent.save_config()
         self.__set_sourcedata_file(fname)
 
     def __set_sourcedata_file(self, fname: pathlib.Path):
@@ -328,6 +355,78 @@ class SourceDataWidget(QGroupBox):
             self.vars_cb.clear()
             self.dims_btn.setEnabled(False)
             QMessageBox.critical(self, "Error", f"Could not parse {fname}:\n{e}")
+
+    def __set_var(self, v):
+        self.sd.set_var(v)
+
+    def __act_var(self, idx):
+        """When user changes var we save it"""
+        self.parent.cp["DEFAULT"][f"{self.title}_var"] = self.vars_cb.itemText(idx)
+        # likely dims don't make any sense now, so remove
+        self.parent.cp["DEFAULT"].pop(f"{self.title}_dims", None)
+        self.parent.cp["DEFAULT"].pop(f"{self.title}_agg", None)
+        self.parent.save_config()
+        self.__set_var(self.vars_cb.itemText(idx))
+
+    def __set_agg(self, a):
+        self.sd.set_agg(a)
+
+    def __act_agg(self, idx):
+        """When user changes agg we save it"""
+        self.parent.cp["DEFAULT"][f"{self.title}_agg"] = self.agg_cb.itemText(idx)
+        self.parent.save_config()
+        self.__set_agg(self.agg_cb.itemText(idx))
+
+    def __set_dims(self, d2v):
+        """dim_name to selected/entered value as strings"""
+        self.sd.set_dims(d2v)
+
+    def __act_dims(self):
+        vname = self.vars_cb.currentText()
+        if not vname:
+            QMessageBox.warning(self, "No variable", "Please select a variable")
+            return
+
+        d2vals = self.sd.get_d2vals(vname)
+        if not d2vals:
+            QMessageBox.warning(self, "No dims", f"There are no dimensions for {vname}")
+            return
+
+        dialog = DimensionSelectorDialog(
+            d2vals, self.sd.get_d2type(), self.sd.get_dims(), parent=self.parent
+        )
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            selected_values = dialog.get_values()
+            self.parent.cp["DEFAULT"][f"{self.title}_dims"] = json.dumps(selected_values)
+            self.parent.save_config()
+            self.__set_dims(selected_values)
+
+    def __set_timerange(self, rg):
+        """rg is [start Timestamp, end Timestamp]"""
+        self.sd.set_timerange(rg)
+
+    def __act_timerange(self):
+        s = self.sd.get_series()
+        if s is None:
+            QMessageBox.warning(self, "No variable", "File/variable/dimension must be all set")
+            return
+
+        # see if there are defaults saved.  should get from self.sd
+        rg = self.sd.get_timerange()
+
+        # get the full time index from sd
+        index = self.sd.data["time"]
+        if hasattr(index, "values"):
+            index = pd.to_datetime(index.values)
+
+        dialog = TimeRangeSelectorDialog(index, start=rg[0], end=rg[1], parent=self.parent)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            selected_values = dialog.get_values()
+            self.parent.cp["DEFAULT"][f"{self.title}_timerange"] = json.dumps(
+                [selected_values[0].isoformat(), selected_values[1].isoformat()]
+            )
+            self.parent.save_config()
+            self.__set_timerange(selected_values)
 
     def view_data(self):
         d = self.sd.data
@@ -407,69 +506,6 @@ class SourceDataWidget(QGroupBox):
 
         d = PlotDialog(self, s)
         d.exec()
-
-    def __set_var(self, v):
-        self.sd.set_var(v)
-
-    def __act_var(self, idx):
-        """When user changes var we save it"""
-        self.parent.cp["DEFAULT"][f"{self.title}_var"] = self.vars_cb.itemText(idx)
-        self.parent.save_config()
-        self.__set_var(self.vars_cb.itemText(idx))
-
-    def __set_units(self, u):
-        self.sd.set_units(u)
-
-    def __set_dims(self, d2v):
-        """dim_name to selected/entered value as strings"""
-        self.sd.set_dims(d2v)
-
-    def __act_dims(self):
-        vname = self.vars_cb.currentText()
-        if not vname:
-            QMessageBox.warning(self, "No variable", "Please select a variable")
-            return
-
-        d2vals = self.sd.get_d2vals(vname)
-        if not d2vals:
-            QMessageBox.warning(self, "No dims", f"There are no dimensions for {vname}")
-            return
-
-        dialog = DimensionSelectorDialog(
-            d2vals, self.sd.get_d2type(), self.sd.get_dims(), parent=self.parent
-        )
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            selected_values = dialog.get_values()
-            self.parent.cp["DEFAULT"][f"{self.title}_dims"] = json.dumps(selected_values)
-            self.parent.save_config()
-            self.__set_dims(selected_values)
-
-    def __set_timerange(self, rg):
-        """rg is [start Timestamp, end Timestamp]"""
-        self.sd.set_timerange(rg)
-
-    def __act_timerange(self):
-        s = self.sd.get_series()
-        if s is None:
-            QMessageBox.warning(self, "No variable", "File/variable/dimension must be all set")
-            return
-
-        # see if there are defaults saved.  should get from self.sd
-        rg = self.sd.get_timerange()
-
-        # get the full time index from sd
-        index = self.sd.data["time"]
-        if hasattr(index, "values"):
-            index = pd.to_datetime(index.values)
-
-        dialog = TimeRangeSelectorDialog(index, start=rg[0], end=rg[1], parent=self.parent)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            selected_values = dialog.get_values()
-            self.parent.cp["DEFAULT"][f"{self.title}_timerange"] = json.dumps(
-                [selected_values[0].isoformat(), selected_values[1].isoformat()]
-            )
-            self.parent.save_config()
-            self.__set_timerange(selected_values)
 
 
 class DimensionSelectorDialog(QDialog):
