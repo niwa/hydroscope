@@ -196,8 +196,13 @@ class Window(QMainWindow):
                 val = cp.getboolean("aggregation", fallback=False)
                 ag.setChecked(val)
                 ag.setToolTip("Allow time aggregation for model or obs data")
-        
                 layout.addRow("Aggregation:", ag)
+
+                self.guessnodata = gn = QCheckBox()
+                val = cp.getboolean("guessnodata", fallback=False)
+                gn.setChecked(val)
+                gn.setToolTip("Attempt to guess nodata value in .csv")
+                layout.addRow("Guess NoData:", gn)
 
                 layout.addWidget(btns)
                 self.setLayout(layout)
@@ -244,6 +249,7 @@ class Window(QMainWindow):
                 self.parent.cp["DEFAULT"]["bfi_np"] = str(bn)
                 self.parent.cp["DEFAULT"]["lastmonthofyear"] = self.ye.currentText()
                 self.parent.cp["DEFAULT"]["aggregation"] = str(self.aggregation.isChecked())
+                self.parent.cp["DEFAULT"]["guessnodata"] = str(self.guessnodata.isChecked())
                 self.parent.save_config()
 
                 return super().accept()

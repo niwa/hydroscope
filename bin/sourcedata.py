@@ -2,6 +2,7 @@ import re
 import pathlib
 import json
 import utils
+import numpy as np
 import pandas as pd
 import xarray as xr
 import matplotlib
@@ -10,8 +11,8 @@ matplotlib.use("QtAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
-from PyQt6.QtGui import QRegularExpressionValidator, QFontDatabase
-from PyQt6.QtCore import QRegularExpression, QDateTime
+from PyQt6.QtGui import QRegularExpressionValidator, QFontDatabase, QDoubleValidator, QFont
+from PyQt6.QtCore import QRegularExpression, QDateTime, Qt
 from PyQt6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
@@ -27,6 +28,13 @@ from PyQt6.QtWidgets import (
     QGroupBox,
     QDateTimeEdit,
     QPlainTextEdit,
+    QCheckBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QSizePolicy,
+    QFormLayout,
+    QSpacerItem,
 )
 
 
@@ -48,7 +56,7 @@ class SourceData:
         self.dims = {}  # measuring var with these dims
         self.timerange = [None, None]  # possibly restrict time range to this for this var
 
-    def read_fn(self, fn):
+    def read_fn(self, fn, guessnodata: bool):
 
         self.series = None
         self.units = None
@@ -56,6 +64,9 @@ class SourceData:
         self.agg = "mean"
         self.dims = {}
         self.timerange = [None, None]
+
+        # if we shouldn't show the guessnodata dialog again
+        never_show_guessnodata = False
 
         # get the data and set vars
         self.fn = fn
@@ -74,6 +85,13 @@ class SourceData:
                     )
             if pd.infer_freq(df.index) is None:
                 raise ValueError("First column doesn't have uniform frequency")
+            df.index.name = 'time'
+            if guessnodata:
+                dlg = GuessNoDataDialog(df)
+                if dlg.var2guess and dlg.exec():
+                    never_show_guessnodata = dlg.never_show.isChecked()
+                    for var, val in dlg.var2nodata.items():
+                        df.loc[df[var]==val, var] = np.nan
             self.vars = df.columns.tolist()
             try:
                 df.apply(pd.to_numeric, errors="raise")
@@ -114,6 +132,9 @@ class SourceData:
 
         if not self.vars or len(self.vars) < 1:
             raise ValueError("No variables found in file")
+
+        # if we were guessing, but shouldn't, return True
+        return guessnodata and never_show_guessnodata
 
     def get_vars(self):
         return self.vars
@@ -348,7 +369,10 @@ class SourceDataWidget(QGroupBox):
 
         # inform model/obs about new file
         try:
-            self.sd.read_fn(fname)
+            guess = self.parent.cp["DEFAULT"].getboolean('guessnodata', False)
+            if self.sd.read_fn(fname, guess):
+                self.parent.cp["DEFAULT"]['guessnodata'] = "False"
+                self.parent.save_config()
             self.vars_cb.addItems(self.sd.get_vars())
         except Exception as e:
             self.fn_le.setText("Click to select file")
@@ -506,6 +530,117 @@ class SourceDataWidget(QGroupBox):
 
         d = PlotDialog(self, s)
         d.exec()
+
+
+
+class GuessNoDataDialog(QDialog):
+    def __init__(self, df: pd.DataFrame, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Set NoData value")
+        self.resize(500, 300)
+
+        # maps var to my guess of nodata
+        self.var2guess = var2guess = self._possible_nodatas(df)
+        if not var2guess:
+            return
+
+        # we have some guesses.
+        # we will present the dialog with all the variables and let user put values in
+
+        # maps var to lineedit of nodata values
+        self.var2le = {}
+        # maps var to nodata values, populated after user hits OK
+        self.var2nodata = {}
+
+        layout = QVBoxLayout(self)
+
+        top_label = QLabel(
+            "<b>Warning:</b> You asked me to guess NoData values in .csv files.<br>"
+            "This is not reliable, but I think the following might be "
+            "NoData values. Update or leave blank if there is no NoData",
+            wordWrap=True
+        )
+        top_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(top_label)
+
+        flayout = QFormLayout()
+        header_label_var = QLabel("Variable")
+        header_label_var.setFont(QFont("", weight=QFont.Weight.Bold))
+        header_label_nodata = QLabel("NoData")
+        header_label_nodata.setFont(QFont("", weight=QFont.Weight.Bold))
+        flayout.addRow(header_label_var, header_label_nodata)
+        for var in df.columns:
+            self.var2le[var] = le = QLineEdit()
+            le.setValidator(QDoubleValidator())
+            if var in var2guess:
+                le.setText(str(var2guess[var]))
+            le.setFixedWidth(70)
+            flayout.addRow(var, le)
+
+        layout.addLayout(flayout)
+
+        bot_label = QLabel(
+            "Automatically guessing NoData values is error prone. "
+            "A better approach is to edit your .csv file yourself, "
+            "replacing NoData values with blanks, which is the typical "
+            "way of denoting missing values in a .csv file.",
+            wordWrap=True
+        )
+        bot_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(bot_label)
+
+        # Never show again checkbox
+        self.never_show = QCheckBox("Never show this dialog again")
+        layout.addWidget(self.never_show)
+
+        # OK / Cancel
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.ok)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def ok(self):
+        """Alter var2nodata to map var to the new nodata"""
+        self.var2nodata = {}
+        for var, le in self.var2le.items():
+            try:
+                val = float(le.text())
+            except ValueError:
+                continue
+            self.var2nodata[var] = val
+        self.accept()
+
+    def _possible_nodatas(self, df):
+        """Return dict of variable name to guessed NoData value"""
+        candidates = {}
+
+        for col in df.columns:
+            if not pd.api.types.is_numeric_dtype(df[col]):
+                continue
+
+            series = df[col].dropna()
+            if series.empty:
+                continue
+
+            q1 = series.quantile(0.1)
+            q9 = series.quantile(0.9)
+            iqr = q9 - q1
+            if iqr == 0:
+                continue
+            lower = q1 - 5 * iqr
+            upper = q9 + 5 * iqr
+
+            # outside 5 IQRs
+            outliers = series[(series < lower) | (series > upper)]
+            if outliers.empty:
+                continue
+
+            # most frequent outlier is first
+            candidates[col] = outliers.value_counts().index[0]
+
+        return candidates
+
+
 
 
 class DimensionSelectorDialog(QDialog):

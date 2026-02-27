@@ -75,10 +75,13 @@ need and whether time aggregation is allowed.
 	<li>Peak gap: The minimum number of days between peak flow events.
 	<li>BFI alpha: The alpha parameter in the Lyne and Hollick baseflow index filter for low flow modeling.
 	<li>BFI passes: The number of passes for in the Lyne and Hollick baseflow index filter for low flow modeling.
-    <li>Last month of year: This is to define seasonal and annual aggregation.
+    	<li>Last month of year: This is to define seasonal and annual aggregation.
 	<li>Aggregation: If selected then model and observational data do not have
         to have the same timestep, the finer timescale will be aggregated to
         the coarser.
+	<li>Guess NoData: If ticked when reading in a .csv file an attempt to guess what values could be representing NoData
+	is performed. This is error prone and not encouraged. The standard way to represent NoData in a .csv file is to leave
+	those values blank, so you are better to edit your .csv file and do that.
 </ul>
 
 

@@ -173,8 +173,8 @@ class Results:
 
         # get the timestep in seconds
         try:
-            dt = (obs.index[1] - obs.index[0]).seconds
-            sdt = (sim.index[1] - sim.index[0]).seconds
+            dt = (obs.index[1] - obs.index[0]).total_seconds()
+            sdt = (sim.index[1] - sim.index[0]).total_seconds()
         except Exception as exp:
             raise ValueError(f"Can't determine peaks, series possibly not long enough: {exp}")
         if dt != sdt:
@@ -285,22 +285,25 @@ class Results:
         df = pd.DataFrame({"obs": obs, "sim": sim}).reset_index()
 
         if events:
-            pks = self.peak_table("", sim, obs)
-            ax1.scatter(pks.sim_time.values, pks.sim_val.values, color="red", zorder=5)
-            ax2.scatter(pks.obs_time.values, pks.obs_val.values, color="blue", zorder=5)
-            for i, v in zip(pks.sim_time.values, pks.sim_val.values):
-                label = pd.to_datetime(i).strftime("%Y-%m-%d")
-                ax1.text(
-                    i, v, label, ha="center", color="red", va="bottom", fontsize=8, rotation=45
-                )
-            for i, v in zip(pks.obs_time.values, pks.obs_val.values):
-                label = pd.to_datetime(i).strftime("%Y-%m-%d")
-                ax2.text(
-                    i, v, label, ha="center", color="blue", va="bottom", fontsize=8, rotation=45
-                )
+            try:
+                pks = self.peak_table("", sim, obs)
+                ax1.scatter(pks.sim_time.values, pks.sim_val.values, color="red", zorder=5)
+                ax2.scatter(pks.obs_time.values, pks.obs_val.values, color="blue", zorder=5)
+                for i, v in zip(pks.sim_time.values, pks.sim_val.values):
+                    label = pd.to_datetime(i).strftime("%Y-%m-%d")
+                    ax1.text(
+                        i, v, label, ha="center", color="red", va="bottom", fontsize=8, rotation=45
+                    )
+                for i, v in zip(pks.obs_time.values, pks.obs_val.values):
+                    label = pd.to_datetime(i).strftime("%Y-%m-%d")
+                    ax2.text(
+                        i, v, label, ha="center", color="blue", va="bottom", fontsize=8, rotation=45
+                    )
 
-            df["obs_event"] = df.time.isin(pks.obs_time.values)
-            df["sim_event"] = df.time.isin(pks.sim_time.values)
+                df["obs_event"] = df.time.isin(pks.obs_time.values)
+                df["sim_event"] = df.time.isin(pks.sim_time.values)
+            except Exception as exp:
+                ax1.text(0.5, 0.5, exp, transform=ax1.transAxes, ha="center", va="center") 
 
         fig.tight_layout()
         return (df, fig)
