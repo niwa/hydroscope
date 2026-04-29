@@ -6,6 +6,7 @@ import pathlib
 import configparser
 import platformdirs
 from PyQt6.QtWidgets import (
+    QHBoxLayout,
     QApplication,
     QMainWindow,
     QDialog,
@@ -17,7 +18,7 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QCheckBox,
-    QComboBox
+    QComboBox,
 )
 from PyQt6.QtGui import (
     QAction,
@@ -30,6 +31,9 @@ import updates
 import sourcedata
 import purpose
 import results
+import datasets_panel
+import dataset_editor
+import dataset
 
 class Window(QMainWindow):
 
@@ -55,6 +59,29 @@ class Window(QMainWindow):
         os.makedirs(cdir, mode=0o755, exist_ok=True)
         self.cfile = cdir / 'config.ini'
         self.load_config()
+
+        # list of datasets
+        guess = self.cp["DEFAULT"].getboolean("guessnodata", fallback=False)                       
+        self.datasets = []
+        badsecs = []
+        for section in self.cp.sections():
+            if section.startswith("dataset_"):
+                try:
+                    d = dataset.Dataset.from_config_dict(self.cp[section], guessnodata=guess)
+                except Exception:
+                    badsecs.append(section)
+                else:
+                    self.datasets.append(d)
+                 
+        self.dstm = datasets_panel.DataSetsTableModel(self.datasets)
+        for s in badsecs:
+            self.cp.remove_section(s)
+        self.save_config()
+
+        # so when Adding or Removing we update config
+        self.dstm.datasetsChanged.connect(self.update_config_from_model)
+        self.dstm.dataChanged.connect(self.update_config_from_model)
+
 
         # the model
         self.model = sourcedata.SourceData()
@@ -88,6 +115,18 @@ class Window(QMainWindow):
 
         self.cp = configparser.ConfigParser()
         self.cp.read(self.cfile)
+
+    def update_config_from_model(self):
+        print("doing the config from panel")
+        for section in self.cp.sections():
+            if section.startswith("dataset_"):
+                self.cp.remove_section(section)
+
+        for i, cfg in enumerate(self.dstm.to_config_dicts()):
+            section = f"dataset_{i}"
+            self.cp[section] = cfg
+
+        self.save_config()
 
     def save_config(self):
         with open(self.cfile, 'w') as cfh:
@@ -123,6 +162,17 @@ class Window(QMainWindow):
     def __create_main(self) -> QWidget:
         widget = QWidget()
         vbox = QVBoxLayout(widget)
+
+        # dataset table and editor layout
+        ds_layout = QHBoxLayout()
+        self.dataset_panel = datasets_panel.DatasetsPanel(self.dstm, parent=self)
+        self.dataset_editor = dataset_editor.DatasetEditor(parent=self)
+        ds_layout.addWidget(self.dataset_panel)
+        ds_layout.addWidget(self.dataset_editor)
+        self.dataset_panel.datasetSelected.connect(self.dataset_editor.load_dataset)
+
+        vbox.addLayout(ds_layout)
+
 
         md = sourcedata.SourceDataWidget(self.model, title='Model', parent=self)
         vbox.addWidget(md)
