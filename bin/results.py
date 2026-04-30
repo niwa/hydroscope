@@ -29,7 +29,6 @@ from PyQt6.QtWidgets import (
     QHeaderView,
     QSizePolicy,
     QMessageBox,
-    QInputDialog,
     QComboBox,
     QStackedWidget,
 )
@@ -212,33 +211,37 @@ class Results:
             }
         )
 
-    def metric_table(self, purp, sim: pd.Series, obs: pd.Series):
+    def metric_table(self, purp, sims: pd.Series, obs: pd.Series):
         """Return a dataframe with the metrics and their values."""
 
         # some of the metrics need the same start and end
-        start = max(sim.index.min(), obs.index.min())
-        end = min(sim.index.max(), obs.index.max())
-        sim = sim.loc[start:end]
+        start = max(max(s.index.min() for s in sims), obs.index.min())
+        end = min(min(s.index.max() for s in sims), obs.index.max())
+        sims = [s.loc[start:end] for s in sims]
         obs = obs.loc[start:end]
 
         if start >= end:
             return pd.DataFrame({"Error": ["Not enough overlapping data"]})
 
         mets = self.p2m[purp]["metrics"]
-        vals = []
-        for m in mets:
-            try:
-                f = getattr(self, f"{m['fun']}")
-            except Exception as exp:
-                val = f"No {m['fun']} defined: {exp}"
-            else:
+        vals = {}
+        for s in sims:
+            vs = []
+            for m in mets:
                 try:
-                    val = f(sim, obs)
+                    f = getattr(self, f"{m['fun']}")
                 except Exception as exp:
-                    val = f"{exp}"
-            vals.append(val)
-
-        return pd.DataFrame({"Metric": [m["name"] for m in mets], "Value": vals})
+                    v = f"No {m['fun']} defined: {exp}"
+                else:
+                    try:
+                        v = f(s, obs)
+                    except Exception as exp:
+                        v = f"{exp}"
+                vs.append(v)
+            vals[s.name] = vs
+        data = {"Metric": [m["name"] for m in mets]}
+        data.update(vals)
+        return pd.DataFrame(data)
 
     # graphs
     def __hydrograph(self, sim: pd.Series, obs: pd.Series, simunits, obsunits, events=True):
@@ -292,18 +295,32 @@ class Results:
                 for i, v in zip(pks.sim_time.values, pks.sim_val.values):
                     label = pd.to_datetime(i).strftime("%Y-%m-%d")
                     ax1.text(
-                        i, v, label, ha="center", color="red", va="bottom", fontsize=8, rotation=45
+                        i,
+                        v,
+                        label,
+                        ha="center",
+                        color="red",
+                        va="bottom",
+                        fontsize=8,
+                        rotation=45,
                     )
                 for i, v in zip(pks.obs_time.values, pks.obs_val.values):
                     label = pd.to_datetime(i).strftime("%Y-%m-%d")
                     ax2.text(
-                        i, v, label, ha="center", color="blue", va="bottom", fontsize=8, rotation=45
+                        i,
+                        v,
+                        label,
+                        ha="center",
+                        color="blue",
+                        va="bottom",
+                        fontsize=8,
+                        rotation=45,
                     )
 
                 df["obs_event"] = df.time.isin(pks.obs_time.values)
                 df["sim_event"] = df.time.isin(pks.sim_time.values)
             except Exception as exp:
-                ax1.text(0.5, 0.5, exp, transform=ax1.transAxes, ha="center", va="center") 
+                ax1.text(0.5, 0.5, exp, transform=ax1.transAxes, ha="center", va="center")
 
         fig.tight_layout()
         return (df, fig)
@@ -370,7 +387,7 @@ class Results:
         fig.tight_layout()
         return (df, fig)
 
-    def get_tables(self, purp, sim, obs):
+    def get_tables(self, purp, sims, obs):
 
         dfs = []
         for t in self.p2m[purp]["tables"]:
@@ -380,7 +397,7 @@ class Results:
                 val = pd.DataFrame({"Error": [f"No {t['fun']} defined: {exp}"]})
             else:
                 try:
-                    val = f(purp, sim, obs)
+                    val = f(purp, sims, obs)
                 except Exception as exp:
                     val = pd.DataFrame({"Error": [f"{exp}"]})
             dfs.append(val)
@@ -425,7 +442,7 @@ class Results:
                 val = [pd.DataFrame(), matplotlib.figure.Figure(constrained_layout=True)]
             else:
                 try:
-                    val = f(sim, obs, simunits, obsunits)
+                    val = f(sim[0], obs, simunits[0], obsunits)
                 except Exception:
                     val = [pd.DataFrame(), matplotlib.figure.Figure(constrained_layout=True)]
             ret.append([g["name"], val[0], val[1]])
@@ -449,30 +466,44 @@ class ResultsWidget(QGroupBox):
             return diffs.median()
         return None
 
-    def calculate(self, purpose, model, obs, munits, ounits, magg, oagg):
+    def calculate(self, purpose, models, obs, munits, ounits, magg, oagg):
+        """models is a list of series"""
+
         self.clear_tabs()
 
         if self.results.cp.getboolean("aggregation", fallback=False):
-            m_ts = self.__get_ts(model.index)
+            m_ts = [self.__get_ts(m.index) for m in models]
             o_ts = self.__get_ts(obs.index)
-            if m_ts is None:
-                QMessageBox.warning(self, "Timestep error", "Cannot work out timestep for model")
+            if any(t is None for t in m_ts):
+                QMessageBox.warning(
+                    self, "Timestep error", "Cannot work out timestep for a model"
+                )
                 return
             if o_ts is None:
-                QMessageBox.warning(self, "Timestep error", "Cannot work out timestep for obs")
+                QMessageBox.warning(
+                    self, "Timestep error", "Cannot work out timestep for reference model"
+                )
                 return
 
-            # only aggregate if enough difference in timesteps
-            if abs(m_ts - o_ts) > 1:
+            max_ts = o_ts
+            max_source = obs
+            for m, ts in zip(models, m_ts):
+                if ts > max_ts:
+                    max_ts = ts
+                    max_source = m
+            freq = pd.infer_freq(max_source.index)
+            if freq is None:
+                freq = "1H"
 
-                if m_ts < o_ts:
-                    # FIXME, infer might break
-                    model = getattr(model.resample(pd.infer_freq(obs.index)), magg)()
-                elif o_ts < m_ts:
-                    obs = getattr(obs.resample(pd.infer_freq(model.index)), oagg)()
+            for i, (m, ts, ma) in enumerate(zip(models, m_ts, magg)):
+                # only aggregate if enough difference in timesteps
+                if ts < max_ts - 1:
+                    models[i] = m.resample(freq).agg(ma)
+            if o_ts < max_ts - 1:
+                obs = obs.resample(freq).agg(oagg)
 
         # possibly not enough data left if we did aggregation
-        if len(model) < 3:
+        if any(len(m) < 3 for m in models):
             QMessageBox.warning(
                 self, "Data error", "Not enough model data to calculate statistics"
             )
@@ -482,7 +513,9 @@ class ResultsWidget(QGroupBox):
             return
 
         # scales is {"original", None, "daily": "D", "monthly": "ME" etc}
-        scales = self.__get_scales_for_series(self.__get_ts(model.index))
+        m_ts = [self.__get_ts(m.index) for m in models]
+        o_ts = self.__get_ts(obs.index)
+        scales = self.__get_scales_for_series(max(max(m_ts), o_ts))
 
         # build the figure data
         numoffigs = len(self.results.p2m[purpose]["graphs"])
@@ -490,10 +523,14 @@ class ResultsWidget(QGroupBox):
         dfs = [{} for _ in range(numoffigs)]
         figs = [{} for _ in range(numoffigs)]
         for label, agg in scales.items():
-            m = model if agg is None else getattr(model.resample(f"{agg}"), magg)()
-            o = obs if agg is None else getattr(obs.resample(f"{agg}"), oagg)()
+            ms = (
+                models
+                if agg is None
+                else [m.resample(f"{agg}").agg(ma) for m, ma in zip(models, magg)]
+            )
+            o = obs if agg is None else obs.resample(f"{agg}").agg(oagg)
             for i, (name, df, fig) in enumerate(
-                self.results.get_graphs(purpose, m, o, munits, ounits)
+                self.results.get_graphs(purpose, ms, o, munits, ounits)
             ):
                 names[i][label] = name
                 dfs[i][label] = df
@@ -511,9 +548,13 @@ class ResultsWidget(QGroupBox):
         dfs = [{} for _ in range(numoftables)]
         datas = [{} for _ in range(numoftables)]
         for label, agg in scales.items():
-            m = model if agg is None else getattr(model.resample(f"{agg}"), magg)()
-            o = obs if agg is None else getattr(obs.resample(f"{agg}"), oagg)()
-            for i, ndd in enumerate(self.results.get_tables(purpose, m, o)):
+            ms = (
+                models
+                if agg is None
+                else [m.resample(f"{agg}").agg(ma) for m, ma in zip(models, magg)]
+            )
+            o = obs if agg is None else obs.resample(f"{agg}").agg(oagg)
+            for i, ndd in enumerate(self.results.get_tables(purpose, ms, o)):
                 names[i][label] = ndd[0]
                 dfs[i][label] = ndd[1]
                 datas[i][label] = ndd[2]
@@ -522,36 +563,6 @@ class ResultsWidget(QGroupBox):
             wid = TimescaleTableTab(name, df, data)
             i = self.tabs.addTab(wid, next(iter(name.values())))
             self.tabs.tabBar().setTabData(i, df)
-
-        """
-        # figures
-        for name, df, fig in self.results.get_graphs(purpose, model, obs, munits, ounits):
-            # need a container to put canvas/plot and toolbar in
-            container = QWidget()
-            layout = QHBoxLayout(container)
-            can = FigureCanvas(fig)
-
-            # narrow vertical toolbar
-            toolbar = NavigationToolbar(can, self)
-            toolbar.setOrientation(Qt.Orientation.Vertical)
-            toolbar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
-            toolbar.setMaximumWidth(40)
-            toolbar.setMinimumWidth(40)
-            for action in toolbar.actions():
-                if action.text() in ("Subplots", "Customize"):
-                    toolbar.removeAction(action)
-
-            layout.addWidget(can)
-            layout.addWidget(toolbar)
-            i = self.tabs.addTab(container, name)
-            self.tabs.tabBar().setTabData(i, df)
-        """
-        """
-        for name, df, data in self.results.get_tables(purpose, model, obs):
-            i = self.tabs.addTab(data, name)
-            self.tabs.tabBar().setTabData(i, df)
-
-        """
 
         self.dl_btn.setEnabled(True)
 

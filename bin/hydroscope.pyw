@@ -191,6 +191,8 @@ class Window(QMainWindow):
 
         if field == "name":
             ds.name = value
+            # this ensures the series has the correct name
+            ds.set_series(ds.get_var(), ds.get_dims(), ds.get_timerange())
         elif field == "var":
             ds.set_series(value, ds.get_dims(), ds.get_timerange())
         elif field == "dims":
@@ -318,16 +320,19 @@ class Window(QMainWindow):
 
     def calculate(self, purp: str):
         """Calculate the given metric if possible"""
-        m = self.model.get_series()
-        o = self.obs.get_series()
-        mu = self.model.get_units()
-        ou = self.obs.get_units()
-        ma = self.model.get_agg()
-        oa = self.obs.get_agg()
-        if m is None or o is None:
-            QMessageBox.warning(self, "No data", "Need model and obs data defined first")
+        r = [d for d in self.datasets if d.include and d.ref]
+        nr = [d for d in self.datasets if d.include and not d.ref]
+        if len(r) != 1 or len(nr) < 1:
+            QMessageBox.warning(self, "No data", "Need exactly one reference dataset, and at least one more")
             return
-        self.rd.calculate(purp, m, o, mu, ou, ma, oa)
+
+        r = r[0]
+        return self.rd.calculate(
+            purp,
+            [d.get_series() for d in nr], r.get_series(),
+            [d.get_units() for d in nr], r.get_units(),
+            [d.get_agg() for d in nr], r.get_agg(),
+        )
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
