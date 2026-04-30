@@ -53,15 +53,16 @@ def msg(parent, title, fname):
 class ClickableLineEdit(QLineEdit):
     clicked = pyqtSignal()
 
-    def __init__(self, text="", char_width=15, parent=None):
+    def __init__(self, text="", char_width=None, parent=None):
         super().__init__(text, parent)
         self.setReadOnly(True)
         self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
         # Set fixed width based on character count
         font_metrics = QFontMetrics(self.font())
-        width = font_metrics.horizontalAdvance("X" * char_width) + 10
-        self.setFixedWidth(width)
+        if char_width is not None:
+            width = font_metrics.horizontalAdvance("X" * char_width) + 10
+            self.setFixedWidth(width)
 
     def mousePressEvent(self, event):
         self.clicked.emit()

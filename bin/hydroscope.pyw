@@ -24,8 +24,7 @@ from PyQt6.QtGui import (
     QAction,
     QIcon
 )
-from PyQt6.QtCore import QTimer
-
+from PyQt6.QtCore import QTimer, pyqtSignal
 import utils
 import updates
 import sourcedata
@@ -36,6 +35,7 @@ import dataset_editor
 import dataset
 
 class Window(QMainWindow):
+    datasetUpdated = pyqtSignal(object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -82,13 +82,6 @@ class Window(QMainWindow):
         self.dstm.datasetsChanged.connect(self.update_config_from_model)
         self.dstm.dataChanged.connect(self.update_config_from_model)
 
-
-        # the model
-        self.model = sourcedata.SourceData()
-
-        # the obs
-        self.obs = sourcedata.SourceData()
-
         # the results logic
         if getattr(sys, "frozen", False):
             fname = pathlib.Path(sys._MEIPASS) / "metrics.json"
@@ -117,7 +110,6 @@ class Window(QMainWindow):
         self.cp.read(self.cfile)
 
     def update_config_from_model(self):
-        print("doing the config from panel")
         for section in self.cp.sections():
             if section.startswith("dataset_"):
                 self.cp.remove_section(section)
@@ -169,16 +161,10 @@ class Window(QMainWindow):
         self.dataset_editor = dataset_editor.DatasetEditor(parent=self)
         ds_layout.addWidget(self.dataset_panel)
         ds_layout.addWidget(self.dataset_editor)
-        self.dataset_panel.datasetSelected.connect(self.dataset_editor.load_dataset)
+        self.dataset_panel.datasetSelected.connect(self._dataset_selected)
+        self.dataset_editor.datasetFieldChanged.connect(self._dataset_field_changed)
 
         vbox.addLayout(ds_layout)
-
-
-        md = sourcedata.SourceDataWidget(self.model, title='Model', parent=self)
-        vbox.addWidget(md)
-
-        od = sourcedata.SourceDataWidget(self.obs, title='Observations', parent=self)
-        vbox.addWidget(od)
 
         if getattr(sys, "frozen", False):
             fname = pathlib.Path(sys._MEIPASS) / "metrics.json"
@@ -193,7 +179,30 @@ class Window(QMainWindow):
         vbox.addWidget(rd)
 
         return widget
-   
+ 
+    def _dataset_selected(self, ds):
+        self.current_dataset = ds
+        self.dataset_editor.load_dataset(ds)
+
+    def _dataset_field_changed(self, field, value):
+        ds = self.current_dataset
+        if ds is None:
+            return
+
+        if field == "name":
+            ds.name = value
+        elif field == "var":
+            ds.set_series(value, ds.get_dims(), ds.get_timerange())
+        elif field == "dims":
+            ds.set_series(ds.get_var(), value, ds.get_timerange())
+        elif field == "agg":
+            ds.set_agg(value)
+        elif field == "timerange":
+            ds.set_series(ds.get_var(), ds.get_dims(), value)
+
+        self.dstm.dataset_changed(ds)
+        self.datasetUpdated.emit(ds)
+
     def __settings(self):
         class SettingsDialog(QDialog):
             def __init__(self, parent):
