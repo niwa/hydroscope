@@ -9,6 +9,7 @@ from hydrosignatures.baseflow import baseflow_index
 
 matplotlib.use("QtAgg")
 import matplotlib.figure
+import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import (
     FigureCanvasQTAgg as FigureCanvas,
     NavigationToolbar2QT as NavigationToolbar,
@@ -47,6 +48,7 @@ class Results:
             return np.nan
         return self.nse(np.log(sim), np.log(obs))
 
+    # FIXME, check getting overflow but denom!=0
     def nse(self, sim: pd.Series, obs: pd.Series):
         obs = obs.values
         sim = sim.values
@@ -81,8 +83,8 @@ class Results:
         return RegressionMetric(obs, sim).root_mean_squared_error()
 
     def peakrmse(self, sim: pd.Series, obs: pd.Series):
-        pt = self.peak_table("", sim, obs)
-        return self.rmse(pt.sim_val, pt.obs_val)
+        pt = self.peak_table("", [sim], obs)
+        return self.rmse(pt[f"{sim.name}_val"], pt.obs_val)
 
     def __bfi(self, f: np.array):
         a = float(self.cp.get("bfi_alpha", 0.925))
@@ -127,10 +129,11 @@ class Results:
     def pte(self, sim: pd.Series, obs: pd.Series):
         """Peak timing error which is mean of timing errors in hours"""
 
-        pt = self.peak_table("", sim, obs)
+        pt = self.peak_table("", [sim], obs)
         return np.mean(
             np.abs(
-                pt.obs_time.values.astype("datetime64[ns]") - pt.sim_time.astype("datetime64[ns]")
+                pt.obs_time.values.astype("datetime64[ns]")
+                - pt[f"{sim.name}_time"].astype("datetime64[ns]")
             )
             / np.timedelta64(1, "h")
         )
@@ -159,7 +162,7 @@ class Results:
         )
 
     # tables
-    def peak_table(self, purp, sim: pd.Series, obs: pd.Series):
+    def peak_table(self, purp, sims: pd.Series, obs: pd.Series):
         """Return df of peaks
 
         Returns
@@ -173,15 +176,24 @@ class Results:
         # get the timestep in seconds
         try:
             dt = (obs.index[1] - obs.index[0]).total_seconds()
-            sdt = (sim.index[1] - sim.index[0]).total_seconds()
         except Exception as exp:
             raise ValueError(f"Can't determine peaks, series possibly not long enough: {exp}")
-        if dt != sdt:
-            raise ValueError("Can only determine peaks when obs and sim have same timestep")
+        try:
+            sdts = [(s.index[1] - s.index[0]).total_seconds() for s in sims]
+        except Exception as exp:
+            raise ValueError(f"Can't determine peaks, series possibly not long enough: {exp}")
+        if not all(sdt == dt for sdt in sdts):
+            raise ValueError("Can only determine peaks when obs and sims have same timestep")
 
-        # get the peaks for obs and sim
+        if peak_gap <= dt:
+            raise ValueError("Can't demtermine peaks, aggregated series possibly not long enough")
+
+        # get the peaks for obs and the sims
+        # times[0] list of obs peaks
+        # times[1] list of peaks for first sim
+        # etc
         times = []
-        for s in (obs, sim):
+        for s in [obs] + sims:
             # indices into obs.values
             peaks, _ = find_peaks(s.values, distance=peak_gap / dt)
             # these are the top indices sorted, biggest is last
@@ -189,7 +201,7 @@ class Results:
             # return the actual times
             times.append(s.index[top_peaks])
 
-        if len(times[0]) == 0 or len(times[1]) == 0:
+        if any(len(t) == 0 for t in times):
             return pd.DataFrame(
                 {
                     "obs_time": [],
@@ -200,16 +212,19 @@ class Results:
             )
 
         obs_time = times[0]
-        sim_time = [times[1][np.argmin(np.abs(p - times[1]))] for p in obs_time]
+        data = {
+            "obs_time": obs_time,
+            "obs_val": obs[obs_time].values,
+        }
 
-        return pd.DataFrame(
-            {
-                "obs_time": obs_time,
-                "obs_val": obs[obs_time].values,
-                "sim_time": sim_time,
-                "sim_val": sim[sim_time].values,
-            }
-        )
+        for sim, sim_times in zip(sims, times[1:]):
+            st = [sim_times[np.argmin(np.abs(p - sim_times))] for p in obs_time]
+            data[f"{sim.name}_time"] = st
+            data[f"{sim.name}_val"] = sim[st].values
+
+        df = pd.DataFrame(data)
+
+        return df
 
     def metric_table(self, purp, sims: pd.Series, obs: pd.Series):
         """Return a dataframe with the metrics and their values."""
@@ -244,69 +259,56 @@ class Results:
         return pd.DataFrame(data)
 
     # graphs
-    def __hydrograph(self, sim: pd.Series, obs: pd.Series, simunits, obsunits, events=True):
+    def __hydrograph(
+        self, sims: list[pd.Series], obs: pd.Series, simunits, obsunits, events=True
+    ):
         fig = matplotlib.figure.Figure()  # constrained_layout=True)
-        ax1 = fig.add_subplot(111)
-        ax2 = ax1.twinx()
+        cmap = plt.get_cmap("tab10")
+        ax = fig.add_subplot(111)
 
         def plot(s, ax, **k):
             ax.plot(s.index, s.values, marker="o", **k) if len(s) <= 1 else s.plot(ax=ax, **k)
 
-        plot(sim, ax1, color="red", legend=False)
-        plot(obs, ax2, color="blue", legend=False)
-        xmin = min(sim.index.min(), obs.index.min())
-        xmax = max(sim.index.max(), obs.index.max())
+        sim_colours = {}
+        plot(obs, ax, color="blue", label=obs.name or "", legend=False)
+        for i, sim in enumerate(sims):
+            sim_colours[sim.name or f"sim{i}"] = cmap(i)
+            plot(sim, ax, color=cmap(i), label=sim.name or "", legend=False)
+
+        xmin = min([obs.index.min()] + [s.index.min() for s in sims])
+        xmax = max([obs.index.max()] + [s.index.max() for s in sims])
         if xmax > xmin:
-            ax1.set_xlim(xmin, xmax)
-        ax1.set_xlabel("Time")
+            ax.set_xlim(xmin, xmax)
+        ax.set_xlabel("Time")
 
-        # model sim y axis
-        lab = sim.name if sim.name else "Sim"
-        if simunits:
-            lab = f"{lab} ({simunits})"
-        ax1.set_ylabel(lab, color="red")
-        ax1.tick_params(axis="y", labelcolor="red")
-
-        # obs y axis
-        lab = obs.name if obs.name else "Obs"
-        if obsunits:
-            lab = f"{lab} ({obsunits})"
-        ax2.set_ylabel(lab, color="blue")
-        ax2.tick_params(axis="y", labelcolor="blue")
-
-        # legend
-        lines1, labels1 = ax1.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        ax1.legend(lines1 + lines2, labels1 + labels2)
+        # y axis can only contain units since names never match
+        units = [u for u in [obsunits] + simunits if u is not None]
+        if len(units) > 0 and all(u == units[0] for u in units):
+            ax.set_ylabel(units[0])
 
         # x ticks rotate
-        for label in ax1.get_xticklabels():
+        for label in ax.get_xticklabels():
             label.set_rotation(45)
             label.set_horizontalalignment("right")
 
+        ax.legend()
+
         # make a dataframe
-        df = pd.DataFrame({"obs": obs, "sim": sim}).reset_index()
+        df = pd.DataFrame({"obs": obs})
+        for s in sims:
+            name = s.name or "sim"
+            df[name] = s
+        df = df.reset_index()
 
         if events:
             try:
-                pks = self.peak_table("", sim, obs)
-                ax1.scatter(pks.sim_time.values, pks.sim_val.values, color="red", zorder=5)
-                ax2.scatter(pks.obs_time.values, pks.obs_val.values, color="blue", zorder=5)
-                for i, v in zip(pks.sim_time.values, pks.sim_val.values):
-                    label = pd.to_datetime(i).strftime("%Y-%m-%d")
-                    ax1.text(
-                        i,
-                        v,
-                        label,
-                        ha="center",
-                        color="red",
-                        va="bottom",
-                        fontsize=8,
-                        rotation=45,
-                    )
+                pks = self.peak_table("", sims, obs)
+
+                # put the obs in
+                ax.scatter(pks.obs_time.values, pks.obs_val.values, color="blue", zorder=5)
                 for i, v in zip(pks.obs_time.values, pks.obs_val.values):
                     label = pd.to_datetime(i).strftime("%Y-%m-%d")
-                    ax2.text(
+                    ax.text(
                         i,
                         v,
                         label,
@@ -316,11 +318,36 @@ class Results:
                         fontsize=8,
                         rotation=45,
                     )
-
                 df["obs_event"] = df.time.isin(pks.obs_time.values)
-                df["sim_event"] = df.time.isin(pks.sim_time.values)
+
+                # and each sim
+                for i, sim in enumerate(sims):
+                    name = sim.name or f"sim{i}"
+                    tcol = f"{name}_time"
+                    vcol = f"{name}_val"
+                    colour = sim_colours.get(name, "red")
+
+                    if tcol not in pks or vcol not in pks:
+                        continue
+
+                    ax.scatter(pks[tcol].values, pks[vcol].values, color=colour, zorder=5)
+                    for t, v in zip(pks[tcol].values, pks[vcol].values):
+                        label = pd.to_datetime(t).strftime("%Y-%m-%d")
+                        ax.text(
+                            t,
+                            v,
+                            label,
+                            ha="center",
+                            color=colour,
+                            va="bottom",
+                            fontsize=8,
+                            rotation=45,
+                        )
+
+                    df[f"{name}_event"] = df["time"].isin(pks[tcol].values)
+
             except Exception as exp:
-                ax1.text(0.5, 0.5, exp, transform=ax1.transAxes, ha="center", va="center")
+                ax.text(0.5, 0.5, exp, transform=ax.transAxes, ha="center", va="center")
 
         fig.tight_layout()
         return (df, fig)
@@ -331,7 +358,7 @@ class Results:
     def hydrograph_with_events(self, sim: pd.Series, obs: pd.Series, simunits, obsunits):
         return self.__hydrograph(sim, obs, simunits, obsunits, events=True)
 
-    def flow_duration_curve(self, sim: pd.Series, obs: pd.Series, simunits, obsunits):
+    def flow_duration_curve(self, sims: list[pd.Series], obs: pd.Series, simunits, obsunits):
         """Return flow duration curve from
 
         Returns
@@ -340,50 +367,52 @@ class Results:
             Dataframe with Exceedance % and Discharge columns
         """
 
-        sfdc = self.fdc(sim.values)
-        ofdc = self.fdc(obs.values)
-
         fig = matplotlib.figure.Figure()
-        ax1 = fig.add_subplot(111)
-        ax2 = ax1.twinx()
+        ax = fig.add_subplot(111)
 
-        sfdc.plot(
-            x="Exceedence %", y="Discharge (m3/s)", ax=ax1, color="red", label="sim", legend=False
-        )
+        ofdc = self.fdc(obs.values)
         ofdc.plot(
             x="Exceedence %",
             y="Discharge (m3/s)",
-            ax=ax2,
+            ax=ax,
             color="blue",
-            label="obs",
+            linewidth=2,
+            label=obs.name or "Ref",
             legend=False,
         )
-        ax1.set_xlabel("Exceedence %")
 
-        # model sim y axis
-        lab = sim.name if sim.name else "Sim"
-        if simunits:
-            lab = f"{lab} ({simunits})"
-        ax1.set_ylabel(lab, color="red")
-        ax1.tick_params(axis="y", labelcolor="red")
+        sim_fdcs = []
+        for sim in sims:
+            sfdc = self.fdc(sim.values)
+            sim_fdcs.append((sim, sfdc))
+            sfdc.plot(
+                x="Exceedence %",
+                y="Discharge (m3/s)",
+                ax=ax,
+                label=sim.name or "Sim",
+                legend=False,
+            )
 
-        # obs y axis
-        lab = obs.name if obs.name else "Obs"
-        if obsunits:
-            lab = f"{lab} ({obsunits})"
-        ax2.set_ylabel(lab, color="blue")
-        ax2.tick_params(axis="y", labelcolor="blue")
+        ax.set_xlabel("Exceedence %")
 
-        # legend
-        lines1, labels1 = ax1.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        ax1.legend(lines1 + lines2, labels1 + labels2)
+        # y axis can only contain units since names never match
+        units = [u for u in [obsunits] + simunits if u is not None]
+        if len(units) > 0 and all(u == units[0] for u in units):
+            ax.set_ylabel(units[0])
 
-        df = pd.concat(
-            [sfdc.set_index("Exceedence %"), ofdc.set_index("Exceedence %")], axis=1
-        ).reset_index()
-        df.columns = ["Exceedence %", "sim flow", "obs flow"]
+        ax.legend()
 
+        df = ofdc.set_index("Exceedence %").rename(
+            columns={"Discharge (m3/s)": f"{obs.name or 'Ref'}"}
+        )
+        for sim, sfdc in sim_fdcs:
+            df = df.join(
+                sfdc.set_index("Exceedence %").rename(
+                    columns={"Discharge (m3/s)": f"{sim.name or 'Sim'} flow"}
+                )
+            )
+
+        df = df.reset_index()
         fig.tight_layout()
         return (df, fig)
 
@@ -432,7 +461,7 @@ class Results:
 
         return ret
 
-    def get_graphs(self, purp, sim, obs, simunits, obsunits):
+    def get_graphs(self, purp, sims, obs, simunits, obsunits):
         graphs = self.p2m[purp]["graphs"]
         ret = []
         for g in graphs:
@@ -442,7 +471,7 @@ class Results:
                 val = [pd.DataFrame(), matplotlib.figure.Figure(constrained_layout=True)]
             else:
                 try:
-                    val = f(sim[0], obs, simunits[0], obsunits)
+                    val = f(sims, obs, simunits, obsunits)
                 except Exception:
                     val = [pd.DataFrame(), matplotlib.figure.Figure(constrained_layout=True)]
             ret.append([g["name"], val[0], val[1]])

@@ -1,22 +1,48 @@
 <h1>Hydroscope Manual</h1>
 
-<h2>Model and observsational data</h2>
+<h2>Dataset data</h2>
 
-Error metrics and statistics are compared between model and observation data.
-To load model or observational data click the button beside the "File:" label.
-You can load a .csv or .nc file.  The file must have a time or date index.
-This means for a csv file the first column must contain proper dates or times.
-For a netcdf file one of the dimensions must be time.  There can be lots of
-other columns or variables.
+Error metrics and statistics are compared between models and reference data. To
+load a model or reference observational data click the Add button beside the
+Datasets label. You can load a .csv or .nc file.  The file must have a time or
+date index. This means for a csv file the first column must contain proper
+dates or times. For a netcdf file one of the dimensions must be time.  There
+can be lots of other columns or variables.
+
+Your datasets are listed below the Datasets label.  By default the Name is the
+filename, and the Variable is the first variable found in the file.  You can
+delete a dataset by selecting and clicking the Remove button.
+
+<h3>Inc</h3>
+
+Click this to include this dataset in the metric calculations.  You need at
+least two selected.
+
+<h3>Ref</h3>
+
+Click this to set the reference (observational) dataset.  You need exactly one.
+
+<h2>Dataset editting</h2>
+
+Click a dataset row to begin editting it.
+
+<h3>Name</h3>
+
+By default this is the filename of the dataset.  You may want to change this if
+it is long.
+
+<h3>File</h3>
+
+This cannot be changed.  If this is wrong, Remove the dataset and Add another.
 
 <h3>Variable</h3>
 
-After loading files you must select the variable you are interested in.  The variables
+After loading a dataset you can select the variable you are interested in.  The variables
 founds are in the "Variable:" dropdown box.
 
-<h3>Aggregation</h3>
+<h3>Agg</h3>
 
-If the model and observation data are at different timescales then aggregation
+If the datasets are at different timescales then aggregation
 can be performed (if you are have selected Aggregation in the Settings) to
 enable better statistics calculation.  Moreover all the figures and tables
 produced are produced at coarser timescales, eg if your data is daily, you will
@@ -24,12 +50,12 @@ also get monthly, seasonal, and yearly plots.  This dropdown box allows you to
 set what resampling method to use.  Likely you want 'mean', except for
 rain/precip where you probably want 'sum'.
 
-<h3>Dimensions</h3>
+<h3>Dims</h3>
 
 For a NetCDF file variables can have more than just a time dimension.  You must
-select the dimension using the Dimensions button.  A csv file cannot contain
-dimensions (currently the only dimension is time in the first column), so you
-don't have to click the Dimensions button.
+select the dimension by click the line edit box beside the Dims: label.  A csv
+file cannot contain dimensions (currently the only dimension is time in the
+first column), so you don't have to do anything there.
 
 Selecting Dimensions can be a bit fiddly because a dimension might have a lot
 of possible values.  If there are only a few possible values, they are listed
@@ -39,8 +65,8 @@ before using this tool.
 
 <h3>Time range</h3>
 
-You can optionally restrict the time range of a model or observational variable
-by clicking the Time Range button and modifying the start and end times.
+You can optionally restrict the time range of a dataset
+by clicking the Time Range boxes and modifying the start and end times.
 
 <h3>View</h3>
 
@@ -48,10 +74,9 @@ The View button shows a summary of your selected NetCDF or csv file.
 
 <h3>Plot</h3>
 
-The Plot button can only be used after selecting your File, Variable, and possibly Dimensions.
-The presented graphics are simplistic, this is not a plotting program, and the
-plot
-button is just for you to confirm that you have selected your correct Variable/Dimensions.
+The Plot button can be used to plot the dataset. The presented graphics are
+simplistic, this is not a plotting program, and the plot button is just for you
+to confirm that you have selected your correct Variable/Dimensions.
 
 <h2>Purpose</h2>
 
